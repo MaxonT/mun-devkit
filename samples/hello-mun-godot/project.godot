@@ -1,0 +1,25 @@
+; MUN Hello for Godot 4.7: the devkit's Godot probe.
+
+config_version=5
+
+[application]
+
+config/name="MUN Hello (Godot)"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7", "Mobile")
+
+[autoload]
+
+Mun="*res://addons/mun/mun.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=3
+window/stretch/mode="canvas_items"
+display_server/driver.linuxbsd="wayland"
+
+[rendering]
+
+renderer/rendering_method="mobile"
