@@ -439,7 +439,7 @@ int main(void)
     }
     SDL_Window *window = NULL;
     SDL_GLContext gl = NULL;
-    int width = 0, height = 0, vsync = 0;
+    int width = 0, height = 0;
     if (!headless) {
         /* The window takes the display's own mode: the console has already
          * set the one the player chose (MUN_DISPLAY_MODE says which). */
@@ -462,7 +462,7 @@ int main(void)
             SDL_Quit();
             return 2;
         }
-        vsync = SDL_GL_SetSwapInterval(1) == 0;
+        int vsync = SDL_GL_SetSwapInterval(1) == 0;
         SDL_GL_GetDrawableSize(window, &width, &height);
         SDL_ShowCursor(SDL_DISABLE);
         fprintf(stderr, "hello-mun: video %s, %dx%d @%d Hz, vsync %s, OpenGL %s on %s\n", SDL_GetCurrentVideoDriver(),
@@ -492,10 +492,13 @@ int main(void)
             SDL_GL_SwapWindow(window);
         }
         frames++;
-        /* A game paces itself: without vertical sync (or a window) a frame
-         * would take no time at all. */
+        /* A game paces itself. Where the swap waits for the display, a frame
+         * has already taken its time; where it does not (no window, no
+         * vertical sync, a renderer that returns at once) the rest of a
+         * sixtieth of a second is slept instead of drawing as fast as the
+         * processor allows. */
         Uint32 spent = SDL_GetTicks() - frame_start;
-        if ((headless || !vsync || spent < 4) && spent < 16)
+        if (spent < 16)
             SDL_Delay(16 - spent);
     }
 
