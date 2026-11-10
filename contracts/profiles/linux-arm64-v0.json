@@ -1,0 +1,14 @@
+{
+  "_comment": "The framebuffer profile (docs/runtime.md in MUN OS): a static program, or one linked only against the system's own C libraries.",
+  "profile": "linux-arm64-v0",
+  "status": "measured in QEMU guests only",
+  "source": null,
+  "entry_max_bytes": 67108864,
+  "machine": "aarch64",
+  "glibc": "2.41",
+  "interpreter": "/lib/ld-linux-aarch64.so.1",
+  "base_libraries": ["libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0", "librt.so.1", "libgcc_s.so.1", "ld-linux-aarch64.so.1"],
+  "libraries": {},
+  "limits": {"memory": "512 MiB", "tasks": 32},
+  "card_variant": "game"
+}

@@ -1,0 +1,19 @@
+# MUN Hello: the devkit's native sample. `mdk build`, `mdk check`, `mdk pack`
+# and `mdk sim` read this file.
+
+[project]
+name = "hello-mun"
+
+[card]
+id = "mun.hello"
+title = "MUN Hello"
+version = "0.1.0"
+profile = "linux-arm64-gl-v0"
+size_mib = 64
+accent = "#E39A63"
+background = "#16202B"
+
+[build]
+run = "make"
+entry = "build/hello-mun"
+content = "build/content"

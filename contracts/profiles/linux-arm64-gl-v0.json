@@ -1,0 +1,23 @@
+{
+  "_comment": "What a game on this runtime profile may rely on, as MUN OS documents it (docs/runtime.md, 'Runtime profiles') and lists it (the packages file below). A record for mdk's checks, not a contract of its own: MUN OS's documents govern, and the list there is 'a version record, not an ABI promise'.",
+  "profile": "linux-arm64-gl-v0",
+  "status": "provisional in MUN OS; measured in QEMU guests only",
+  "source": "services/mun-launchd/deploy/runtime-linux-arm64-gl-v0.packages",
+  "entry_max_bytes": 67108864,
+  "machine": "aarch64",
+  "glibc": "2.41",
+  "interpreter": "/lib/ld-linux-aarch64.so.1",
+  "base_libraries": ["libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0", "librt.so.1", "libgcc_s.so.1", "ld-linux-aarch64.so.1"],
+  "libraries": {
+    "libSDL2-2.0.so.0": "libsdl2-2.0-0",
+    "libopenal.so.1": "libopenal1",
+    "libtinyxml2.so.11": "libtinyxml2-11",
+    "libGL.so.1": "libgl1",
+    "libEGL.so.1": "libegl1",
+    "libgbm.so.1": "libgbm1",
+    "libasound.so.2": "libasound2t64",
+    "libstdc++.so.6": "libstdc++6"
+  },
+  "limits": {"memory": "2 GiB", "tasks": 64},
+  "card_variant": "game-gl"
+}

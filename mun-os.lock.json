@@ -1,0 +1,12 @@
+{
+  "_comment": "The MUN OS revision this devkit's tools were checked against. mdk reports the revision it actually finds and says when it differs; set MDK_STRICT_PIN=1 to make a difference an error.",
+  "repository": "https://github.com/Play-MUN/mun-os",
+  "release": "v0.1.0-dev.4",
+  "commit": "2cdf442adff363268f55115f2bae464d518433c8",
+  "trees": {
+    "tools/mun-card": "b096b8570828905abf091eb6815b9d6c2b74ff88"
+  },
+  "files_sha256": {
+    "services/mun-launchd/deploy/runtime-linux-arm64-gl-v0.packages": "b2c47697003a94ec1d26c7802bfb4af60a9c75625b047d87c6ae460413666f52"
+  }
+}

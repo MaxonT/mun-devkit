@@ -1,0 +1,85 @@
+"""The SDK build environment: a pinned Debian 13 ARM64 container with the
+compiler and the development packages of the libraries a console provides,
+taken from the same dated Debian snapshot MUN OS's image is built from
+(tools/env/Dockerfile). A game built in it links against the console's own
+library versions; the same container runs the session simulator for programs
+the host cannot run."""
+
+import hashlib
+import os
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from . import osrepo
+from .errors import MdkError
+
+DOCKERFILE = osrepo.DEVKIT_ROOT / "tools" / "env" / "Dockerfile"
+PLATFORM = "linux/arm64"
+
+
+def image_tag() -> str:
+    """The image is named after its definition: a changed Dockerfile is another image."""
+    return "mun-devkit-env:" + hashlib.sha256(DOCKERFILE.read_bytes()).hexdigest()[:12]
+
+
+def docker() -> str:
+    found = shutil.which("docker")
+    if not found:
+        raise MdkError("E-ENV-DOCKER", "No container runtime found (docker).",
+                       "Install one that runs linux/arm64 containers. On an ARM64 computer they run natively; "
+                       "elsewhere they are emulated and slow.")
+    return found
+
+
+def image_exists() -> bool:
+    done = subprocess.run([docker(), "image", "inspect", image_tag()], capture_output=True, check=False)
+    return done.returncode == 0
+
+
+def build_image() -> None:
+    """Build the environment. Needs the network once: the base image and the
+    packages of the dated snapshot."""
+    command = [docker(), "build", "--platform", PLATFORM, "-t", image_tag(), "-f", str(DOCKERFILE),
+               str(DOCKERFILE.parent)]
+    if subprocess.run(command, check=False).returncode != 0:
+        raise MdkError("E-ENV-BUILD", "The SDK environment could not be built.",
+                       "See the output above. It needs the network for the pinned base image and Debian snapshot.")
+
+
+def require_image() -> None:
+    if not image_exists():
+        raise MdkError("E-ENV", f"The SDK environment ({image_tag()}) has not been built on this computer.",
+                       "Run `mdk env build` once (needs the network; later builds do not).")
+
+
+def run(argv: List[str], project_dir: Path, mun_os: Path, env: Optional[Dict[str, str]] = None,
+        capture: bool = False) -> subprocess.CompletedProcess:
+    """Run `argv` in the environment with the project at /work (writable),
+    the devkit at /opt/mun-devkit and the card package at /opt/mun-os (both
+    read-only), without network, as the calling user."""
+    require_image()
+    command = [docker(), "run", "--rm", "--init", "--platform", PLATFORM, "--network", "none",
+               "--user", f"{os.getuid()}:{os.getgid()}",
+               "-v", f"{Path(project_dir).resolve()}:/work",
+               "-v", f"{osrepo.DEVKIT_ROOT}:/opt/mun-devkit:ro",
+               "-v", f"{Path(mun_os).resolve() / 'tools' / 'mun-card'}:/opt/mun-os/tools/mun-card:ro",
+               "-e", "MUN_DEVKIT=/opt/mun-devkit", "-e", "MUN_OS_DIR=/opt/mun-os", "-e", "HOME=/tmp",
+               "-e", "PYTHONDONTWRITEBYTECODE=1", "-w", "/work"]
+    for name, value in (env or {}).items():
+        command += ["-e", f"{name}={value}"]
+    command += [image_tag(), *argv]
+    return subprocess.run(command, check=False, capture_output=capture, text=capture)
+
+
+def describe() -> Dict[str, str]:
+    """What the environment holds: its own record of compiler and library versions."""
+    done = subprocess.run([docker(), "run", "--rm", "--platform", PLATFORM, "--network", "none", image_tag(),
+                           "cat", "/etc/mun-devkit-env"], capture_output=True, text=True, check=False)
+    record = {"image": image_tag()}
+    for line in done.stdout.splitlines():
+        name, _, value = line.partition("=")
+        if name:
+            record[name] = value
+    return record
