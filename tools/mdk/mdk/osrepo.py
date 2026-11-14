@@ -43,9 +43,25 @@ def find(explicit: Optional[str] = None) -> Path:
                    f"This devkit was checked against {lock()['release']} ({lock()['commit'][:12]}).")
 
 
+def _git_environment() -> Dict[str, str]:
+    """The environment for a Git command aimed at a checkout: this process's
+    without the variables with which Git points a command at a repository
+    (GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE and the rest of `git rev-parse
+    --local-env-vars`). A Git hook exports them, and whatever it starts
+    inherits them: `git -C DIR` would then still answer for the hook's
+    repository, and mdk would report its revision as MUN OS's."""
+    try:
+        local = subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True,
+                               check=False).stdout.split()
+    except OSError:
+        local = []
+    return {key: value for key, value in os.environ.items() if key not in set(local)}
+
+
 def _git(root: Path, *args: str) -> Optional[str]:
     try:
-        done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=False)
+        done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=False,
+                              env=_git_environment())
     except OSError:
         return None
     return done.stdout.strip() if done.returncode == 0 else None
