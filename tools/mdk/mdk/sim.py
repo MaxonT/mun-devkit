@@ -8,9 +8,14 @@ docs/saves.md) and the behaviour of its launcher and card service:
   as working directory and HOME, the facts in the environment;
 - single-object saves: the restore rules, the request checks in their order,
   the stable codes with the console's sentences, one request per connection,
-  one save at a time, the envelope on the "card", the previous copy;
+  one save at a time, the bounds on a line and on a payload and how they are
+  measured, the envelope on the "card", the previous copy;
 - the end of a session: SIGTERM, a grace period, SIGKILL; the result as the
   console words it (exited, failed, crashed).
+
+It follows the MUN OS release named in mun-os.lock.json. An earlier console
+may differ in a detail (the previews before v0.1.0-dev.5 measured a payload
+with every character outside ASCII escaped, and read a shorter line).
 
 What it does not reproduce, and therefore says nothing about: the sandbox
 (user, device rules, read-only system, `noexec` content, memory and task
@@ -39,8 +44,13 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .errors import MdkError
 
-SAVE_MAX_BYTES = 64 * 1024               # a game's payload (docs/saves.md)
-SAVE_LINE_MAX = SAVE_MAX_BYTES + 4096    # the request line the console accepts
+SAVE_MAX_BYTES = 64 * 1024               # a game's payload, measured as compact JSON in UTF-8 (docs/saves.md)
+# The request line the console accepts: the payload may spell every
+# character as a \uXXXX escape, six bytes for one.
+SAVE_LINE_MAX = 6 * SAVE_MAX_BYTES + 4096
+JSON_MAX_DEPTH = 64                      # a line nested deeper is not read
+SAVE_REQUEST_TIMEOUT = 10.0              # a connection that asks nothing for this long is closed
+SAVE_CLIENTS_MAX = 8                     # connections held at once
 STOP_GRACE = 3.0                         # seconds between SIGTERM and SIGKILL (docs/runtime.md)
 SAVE_FORMATS = {"earlier": "neptune-save/1", "mun": "mun-save/1"}
 PROFILE_ENVIRONMENT = {
@@ -58,7 +68,9 @@ CARD_FAULTS = {
     "save_path_unsafe": "La ruta de partidas de la tarjeta contiene un enlace o no es una carpeta",
 }
 # Answered by the launcher before the card is asked.
-LAUNCHER_FAULTS = {"reader_unavailable": "El lector de tarjetas no está disponible"}
+LAUNCHER_FAULTS = {"reader_unavailable": "El lector de tarjetas no está disponible",
+                   "save_failed": "El lanzador no pudo atender el guardado"}
+TOO_LARGE = "La partida supera el tamaño permitido"
 FAULTS = {**CARD_FAULTS, **LAUNCHER_FAULTS}
 
 
@@ -138,6 +150,11 @@ class SimCard:
                     "schema": schema, "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "session": session, "insertion": self.insertion, "payload": payload}
         data = (json.dumps(envelope, ensure_ascii=False) + "\n").encode("utf-8")
+        # The console measures what it is about to write against the bound it
+        # reads with: a save it confirms is one it reads back whole.
+        _, limit = self.rules.save_bounds(self.info)
+        if len(data) > limit:
+            return {"ok": False, "error": {"code": "save_too_large", "message": TOO_LARGE}}
         self.directory.mkdir(parents=True, exist_ok=True)
         temporary = self.directory / "save.json.tmp"
         current = self.directory / "save.json"
@@ -180,10 +197,33 @@ class SimCard:
         return {"ok": True, "bytes": len(data)}
 
 
+def _too_deep(line: bytes, limit: int = JSON_MAX_DEPTH) -> bool:
+    """Whether the JSON in `line` nests arrays and objects deeper than `limit`."""
+    depth, inside, escaped = 0, False, False
+    for byte in line:
+        if inside:
+            if escaped:
+                escaped = False
+            elif byte == 0x5C:
+                escaped = True
+            elif byte == 0x22:
+                inside = False
+        elif byte == 0x22:
+            inside = True
+        elif byte in b"[{":
+            depth += 1
+            if depth > limit:
+                return True
+        elif byte in b"]}":
+            depth -= 1
+    return False
+
+
 class _LineReader:
     """Newline-delimited JSON as the console's launcher reads it: a malformed
-    line or one that is not an object is skipped without an answer; an
-    unfinished line over the limit ends the connection."""
+    line, one nested too deep or one that is not an object is skipped without
+    an answer; a line over the limit, finished or not, is a protocol break
+    (OverflowError)."""
 
     def __init__(self, limit: int):
         self.buffer = bytearray()
@@ -196,8 +236,13 @@ class _LineReader:
             newline = self.buffer.find(b"\n")
             if newline < 0:
                 break
+            if newline > self.limit:
+                self.buffer.clear()
+                raise OverflowError("line over the limit")
             line = bytes(self.buffer[:newline])
             del self.buffer[:newline + 1]
+            if _too_deep(line):
+                continue
             try:
                 message = json.loads(line)
             except ValueError:
@@ -216,8 +261,10 @@ class SaveGate:
     the session is still running when the card has answered."""
 
     def __init__(self, path: Path, card: SimCard, session: str, fail: Optional[Dict[str, int]] = None,
-                 save_delay: float = 0.0, log: Callable[[str], None] = lambda line: None):
+                 save_delay: float = 0.0, log: Callable[[str], None] = lambda line: None,
+                 request_timeout: float = SAVE_REQUEST_TIMEOUT):
         self.path, self.card, self.session, self.log = Path(path), card, session, log
+        self.request_timeout = request_timeout
         self.fail = dict(fail or {})        # code -> how many more saves fail with it (-1: all)
         self.save_delay = save_delay
         self.running = True                 # the session's state, as the launcher sees it
@@ -258,9 +305,15 @@ class SaveGate:
         schema = message.get("schema")
         if not isinstance(schema, int) or isinstance(schema, bool) or schema < 1:
             return refuse("save_invalid", "La versión del esquema de guardado no es válida")
-        # The console measures its own compact serialisation, non-ASCII escaped.
-        if len(json.dumps(message["data"], separators=(",", ":")).encode("utf-8")) > SAVE_MAX_BYTES:
-            return refuse("save_too_large", "La partida supera el tamaño permitido")
+        # Measured as the card will hold it: compact, in UTF-8, every
+        # character as itself however the line spelt it. Text UTF-8 cannot
+        # carry (half of a surrogate pair, which JSON can spell) is no save.
+        try:
+            size = len(json.dumps(message["data"], separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+        except UnicodeEncodeError:
+            return refuse("save_invalid", "La partida contiene texto que no se puede guardar")
+        if size > SAVE_MAX_BYTES:
+            return refuse("save_too_large", TOO_LARGE)
         with self._lock:
             if self.saving:
                 busy = True
@@ -292,10 +345,14 @@ class SaveGate:
     def _serve(self) -> None:
         selector = selectors.DefaultSelector()
         selector.register(self._listener, selectors.EVENT_READ, None)
+        # Per connection: its reader until it has asked (then None), and the
+        # time by which a connection that has asked nothing is closed.
         readers: Dict[socket.socket, Optional[_LineReader]] = {}
+        deadlines: Dict[socket.socket, float] = {}
 
         def drop(connection: socket.socket) -> None:
             readers.pop(connection, None)
+            deadlines.pop(connection, None)
             try:
                 selector.unregister(connection)
             except (KeyError, ValueError):
@@ -306,7 +363,7 @@ class SaveGate:
             try:
                 connection.setblocking(True)
                 connection.settimeout(2.0)
-                connection.sendall((json.dumps(message) + "\n").encode("utf-8"))
+                connection.sendall((json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8", "replace"))
             except OSError:
                 pass
 
@@ -317,23 +374,44 @@ class SaveGate:
                         connection, _ = self._listener.accept()
                     except OSError:
                         continue
+                    if len(readers) >= SAVE_CLIENTS_MAX:
+                        # Room is made by the connection silent for longest;
+                        # one waiting for its answer stays.
+                        silent = [held for held, reader in readers.items() if reader is not None]
+                        if not silent:
+                            connection.close()
+                            continue
+                        drop(min(silent, key=lambda held: deadlines[held]))
                     connection.setblocking(False)
                     readers[connection] = _LineReader(SAVE_LINE_MAX)
+                    deadlines[connection] = time.monotonic() + self.request_timeout
                     selector.register(connection, selectors.EVENT_READ, None)
                     continue
                 connection = key.fileobj
                 reader = readers.get(connection)
                 try:
                     data = connection.recv(65536)
+                    # Anything after the request line is read and dropped.
                     requests = reader.feed(data) if (data and reader) else []
-                except (OSError, OverflowError):
+                except OverflowError:
+                    # No save needs a line that long: the game is told, then dropped.
+                    self.saves.append({"ok": False, "code": "save_too_large"})
+                    send(connection, {"type": "saved", "ok": False,
+                                      "error": {"code": "save_too_large", "message": TOO_LARGE}})
+                    drop(connection)
+                    continue
+                except OSError:
                     data, requests = b"", []
                 if not data:
                     drop(connection)
                     continue
                 for message in requests[:1]:            # one request per connection
-                    readers[connection] = None           # anything further on it is ignored
+                    readers[connection] = None
                     self.request(message, lambda answer, c=connection: send(c, answer))
+            now = time.monotonic()
+            for connection in [held for held, reader in readers.items()
+                               if reader is not None and now > deadlines[held]]:
+                drop(connection)
         for connection in list(readers):
             drop(connection)
         selector.close()

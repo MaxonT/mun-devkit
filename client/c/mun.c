@@ -25,7 +25,7 @@
 #define SAVE_FILE_MAX_BYTES MUN_SAVE_LOAD_MAX_BYTES
 /* One answer line: {"type":"saved","ok":false,"error":{"code":…,"message":…,"detail":…}}. */
 #define REPLY_MAX_BYTES 4096u
-#define JSON_MAX_DEPTH 32
+#define JSON_MAX_DEPTH 64 /* as deep as the console itself reads */
 
 static const char *const FACT_NAMES[MUN_FACT_COUNT_] = {
     "MUN_CARD_ID",      "MUN_CONTENT_VERSION", "MUN_SESSION",   "MUN_RUNTIME_PROFILE",

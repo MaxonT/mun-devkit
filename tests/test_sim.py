@@ -57,14 +57,44 @@ class SaveRequests(Scratch):
         # Just under: {"blob":"…"} is 11 bytes of framing.
         self.assertTrue(ask(gate.path, save_line({"blob": "x" * (65536 - 11)}))["ok"])
 
-    def test_the_bound_counts_the_console_s_escaped_serialisation(self):
-        # 12,000 two-byte characters are 24 KiB as UTF-8 and 72 KiB as the
-        # console measures them (each written \\uXXXX): refused.
+    def test_the_bound_counts_utf8_however_the_line_spells_it(self):
+        # 30,000 two-byte characters are 60 KiB as UTF-8: inside the bound,
+        # whether the line carries them as themselves or as \\uXXXX escapes
+        # (then 180 KiB of line). 33,000 are 66 KiB: over it either way.
+        card = self.card()
+        gate = self.gate(card)
+        for escaped in (False, True):
+            line = (json.dumps({"type": "save", "schema": 1, "data": {"t": "ñ" * 30000}}, ensure_ascii=escaped)
+                    + "\n").encode("utf-8")
+            self.assertTrue(ask(gate.path, line)["ok"], f"escaped={escaped}")
+            line = (json.dumps({"type": "save", "schema": 1, "data": {"t": "ñ" * 33000}}, ensure_ascii=escaped)
+                    + "\n").encode("utf-8")
+            self.assertEqual(ask(gate.path, line)["error"]["code"], "save_too_large", f"escaped={escaped}")
+        self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"t": "ñ" * 30000})
+
+    def test_text_that_utf8_cannot_carry_is_no_save(self):
         gate = self.gate()
-        line = (json.dumps({"type": "save", "schema": 1, "data": {"t": "ñ" * 12000}}, ensure_ascii=False)
-                + "\n").encode("utf-8")
-        self.assertLess(len(line), 30000)
-        self.assertEqual(ask(gate.path, line)["error"]["code"], "save_too_large")
+        answer = ask(gate.path, b'{"type":"save","schema":1,"data":{"t":"\\ud800"}}\n')
+        self.assertEqual((answer["error"]["code"], answer["error"]["message"]),
+                         ("save_invalid", "La partida contiene texto que no se puede guardar"))
+
+    def test_a_save_the_console_confirms_is_one_it_reads_back_whole(self):
+        # Many small values: compact they fit the payload's bound; spaced out
+        # on the card they are half as long again, inside the file's bound.
+        card = self.card()
+        gate = self.gate(card)
+        data = {"v": [0] * 32000}
+        self.assertLessEqual(len(json.dumps(data, separators=(",", ":"))), sim.SAVE_MAX_BYTES)
+        answer = ask(gate.path, save_line(data))
+        _, limit = SAVES.save_bounds(card.info)
+        if answer["ok"]:
+            self.assertLessEqual(answer["bytes"], limit)
+            restored = self.scratch / "restored.json"
+            self.assertTrue(card.restore(restored)["copied"])
+            self.assertEqual(json.loads(restored.read_bytes())["payload"], data)
+        else:   # an earlier console's file bound was tighter than its payload bound
+            self.assertEqual(answer["error"]["code"], "save_too_large")
+            self.assertFalse((card.directory / "save.json").exists())
 
     def test_one_save_at_a_time(self):
         card = self.card()
@@ -85,10 +115,26 @@ class SaveRequests(Scratch):
         for line in (b"not json\n", b"[1,2,3]\n", b'"save"\n', b"\n"):
             self.assertIsNone(ask(gate.path, line, timeout=0.4), line)
 
-    def test_an_unfinished_line_over_the_limit_ends_the_connection(self):
+    def test_a_line_over_the_limit_is_answered_and_the_connection_closed(self):
         gate = self.gate()
-        self.assertEqual(ask(gate.path, b"x" * (sim.SAVE_LINE_MAX + 70000), timeout=3.0), "")
+        for line in (b"x" * (sim.SAVE_LINE_MAX + 70000),                    # never finished
+                     b'{"type":"save","schema":1,"data":{"t":"' + b"x" * sim.SAVE_LINE_MAX + b'"}}\n'):
+            answer = ask(gate.path, line, timeout=3.0)
+            self.assertEqual((answer["ok"], answer["error"]["code"]), (False, "save_too_large"))
         self.assertTrue(ask(gate.path, save_line({"n": 1}))["ok"])          # the service goes on
+
+    def test_a_line_nested_too_deep_gets_no_answer(self):
+        gate = self.gate()
+        deep = b'{"type":"save","schema":1,"data":{"a":' + b"[" * 64 + b"]" * 64 + b"}}\n"
+        self.assertIsNone(ask(gate.path, deep, timeout=0.4))
+        fits = b'{"type":"save","schema":1,"data":{"a":' + b"[" * 62 + b"]" * 62 + b"}}\n"
+        self.assertTrue(ask(gate.path, fits)["ok"])
+
+    def test_a_connection_that_asks_nothing_is_closed(self):
+        gate = self.gate(request_timeout=0.3)
+        self.assertEqual(ask(gate.path, b"", timeout=2.0), "")
+        self.assertEqual(ask(gate.path, b'{"type":"save"', timeout=2.0), "")
+        self.assertTrue(ask(gate.path, save_line({"n": 1}))["ok"])
 
     def test_one_request_per_connection(self):
         card = self.card()

@@ -32,19 +32,24 @@ extern "C" {
 #endif
 
 /* Version of this source: major << 16 | minor << 8 | patch. */
-#define MUN_CLIENT_VERSION 0x000100u
+#define MUN_CLIENT_VERSION 0x000200u
 
 /* The console's bound on a save's payload, in bytes (docs/saves.md). The
- * console measures its own compact serialisation, in which a character
- * outside ASCII takes six bytes: a payload under this bound here may still be
- * refused there with the code "save_too_large". */
+ * console measures the payload as compact JSON in UTF-8: no space between
+ * values, every character as itself. This client refuses a text longer than
+ * the bound without asking, so a payload written with spaces or escapes is
+ * refused here a little earlier than a console would. (The previews before
+ * MUN OS v0.1.0-dev.5 counted every character outside ASCII as six bytes; a
+ * payload under this bound could be refused there with "save_too_large".) */
 #define MUN_SAVE_MAX_BYTES 65536u
 
 /* A buffer of this size always holds a restored payload with its
  * terminator. It is larger than MUN_SAVE_MAX_BYTES because the console keeps
- * the payload as a JSON value and writes it again with its own spacing: what
- * comes back is the same value, not necessarily the same bytes. */
-#define MUN_SAVE_LOAD_MAX_BYTES 81920u
+ * the payload as a JSON value and writes it again with a space after each
+ * separator: what comes back is the same value, not necessarily the same
+ * bytes, and up to half as long again. The figure is the console's own bound
+ * on a save file (112 KiB since MUN OS v0.1.0-dev.5; 80 KiB before). */
+#define MUN_SAVE_LOAD_MAX_BYTES 114688u
 
 /* The save envelope this client reads (the MUN naming generation). */
 #define MUN_SAVE_FORMAT "mun-save/1"

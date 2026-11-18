@@ -27,12 +27,13 @@ enum Status {
 	TOO_LARGE,   ## The payload exceeds SAVE_MAX_BYTES.
 }
 
-## The console's bound on a save's payload. The console measures its own
-## serialisation, in which a character outside ASCII takes six bytes: a
-## payload under this bound here may still be refused there ("save_too_large").
+## The console's bound on a save's payload, measured as compact JSON in
+## UTF-8, which is how this adapter writes it. (The previews before MUN OS
+## v0.1.0-dev.5 counted every character outside ASCII as six bytes and could
+## refuse a payload under this bound with "save_too_large".)
 const SAVE_MAX_BYTES := 65536
 const SAVE_FORMAT := "mun-save/1"
-const _SAVE_FILE_MAX_BYTES := 80 * 1024
+const _SAVE_FILE_MAX_BYTES := 112 * 1024
 const _REPLY_MAX_BYTES := 4096
 
 ## True inside a MUN game session.

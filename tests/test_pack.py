@@ -49,7 +49,9 @@ class Pack(Scratch):
         self.assertEqual(record["card"], {"id": "mun.hello", "title": "MUN Hello", "version": "0.1.0", "kind": "game",
                                           "arch": "aarch64", "profile": "linux-arm64-gl-v0",
                                           "entry": "content/hello-mun", "access": "mount", "naming": "mun"})
-        self.assertEqual(record["tools"]["mun_os"]["pin"], "match")
+        # The record says which MUN OS made the card and whether it is the pinned one.
+        self.assertEqual(record["tools"]["mun_os"]["pin"], osrepo.identity(MUN_OS)["pin"])
+        self.assertEqual(record["tools"]["mun_os"]["commit"], osrepo.identity(MUN_OS)["commit"])
 
         # What the card tool itself reads back from the image, file by file.
         tool = osrepo.card_tool(MUN_OS)

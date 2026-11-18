@@ -75,11 +75,18 @@ class Client(Scratch):
                 self.assertEqual((got["status"], got["code"], got["message"], got["bytes"]),
                                  ("refused", code, sentence, "0"))
 
-    def test_the_console_s_own_bound_can_refuse_what_the_client_let_through(self):
+    def test_the_console_can_refuse_what_the_client_let_through(self):
+        # Valid JSON, and text no card can hold: half of a surrogate pair.
         gate = self.gate()
-        payload = json.dumps({"t": "ñ" * 12000}, ensure_ascii=False).encode("utf-8")
-        got = self.run_munc(["write", "1", "5000"], payload, save_socket=gate.path)
-        self.assertEqual((got["status"], got["code"]), ("refused", "save_too_large"))
+        got = self.run_munc(["write", "1", "5000"], b'{"t":"\\ud800"}', save_socket=gate.path)
+        self.assertEqual((got["status"], got["code"]), ("refused", "save_invalid"))
+
+    def test_text_outside_ascii_counts_as_its_utf8_bytes(self):
+        card = self.card()
+        gate = self.gate(card)
+        payload = json.dumps({"t": "ñ" * 30000}, ensure_ascii=False).encode("utf-8")
+        self.assertEqual(self.run_munc(["write", "1", "5000"], payload, save_socket=gate.path)["status"], "ok")
+        self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"t": "ñ" * 30000})
 
     def test_what_the_client_refuses_before_asking(self):
         gate = self.gate()
@@ -93,7 +100,7 @@ class Client(Scratch):
         big = b'{"b":"' + b"x" * 65536 + b'"}'
         self.assertEqual(self.run_munc(["write", "1", "500"], big, save_socket=socket_path)["status"], "too_large")
         self.assertEqual(gate.saves, [])
-        deep = b'{"a":' + b"[" * 40 + b"]" * 40 + b"}"
+        deep = b'{"a":' + b"[" * 70 + b"]" * 70 + b"}"                    # deeper than a console reads
         self.assertEqual(self.run_munc(["write", "1", "500"], deep, save_socket=socket_path)["status"], "argument")
 
     def test_no_answer_in_time_is_a_timeout(self):
@@ -204,7 +211,8 @@ class Client(Scratch):
         cases = [b"", b"{ torn", b"[1,2]", self.envelope()[:-20], self.envelope(format="neptune-save/1"),
                  self.envelope(format=...), self.envelope(schema=0), self.envelope(schema="2"), self.envelope(schema=...),
                  self.envelope(schema=2 ** 40), self.envelope(payload=[1]), self.envelope(payload=...),
-                 self.envelope() + b"trailing", b"x" * (80 * 1024 + 1),
+                 self.envelope() + b"trailing", b"x" * (112 * 1024 + 1),
+                 self.envelope(payload={"a": json.loads("[" * 70 + "]" * 70)}),
                  b'{"format":"mun-save/1","schema":1,"payload":{},"payload":{}}']
         for content in cases:
             got = self.run_munc(["load"], save_file=self.save_file(content))
@@ -224,12 +232,15 @@ class Client(Scratch):
         got = self.run_munc(["load"], save_file=self.save_file(self.envelope(payload=payload)))
         self.assertEqual((got["status"], int(got["length"])), ("ok", 65536 + 1))
         self.assertEqual(self.run_munc(["load", "65537"], save_file=self.scratch / "save.json")["status"], "too_large")
-        many = {f"k{i}": i for i in range(5000)}
-        self.assertLess(len(json.dumps(many, separators=(",", ":"))), 65536)
+        many = {"v": [0] * 32000}
+        self.assertLessEqual(len(json.dumps(many, separators=(",", ":"))), 65536)
         got = self.run_munc(["load"], save_file=self.save_file(self.envelope(payload=many)))
         self.assertEqual(got["status"], "ok")
-        self.assertGreater(int(got["length"]), 65536)
+        self.assertGreater(int(got["length"]), 95000)            # half as long again on the card
         self.assertEqual(json.loads(got["payload"]), many)
+        nested = {"a": json.loads("[" * 60 + "]" * 60)}          # as deep as a console reads
+        got = self.run_munc(["load"], save_file=self.save_file(self.envelope(payload=nested)))
+        self.assertEqual((got["status"], json.loads(got["payload"])), ("ok", nested))
 
     # ---------------------------------------------------------------- helper
     def test_json_int(self):
