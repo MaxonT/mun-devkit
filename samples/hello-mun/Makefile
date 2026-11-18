@@ -2,6 +2,7 @@
 # console's own library versions; `make host` builds it for the developer's
 # own computer where SDL2 and OpenAL exist, for a look at it in a window.
 MUN_DEVKIT ?= ../..
+NAME       ?= hello-mun
 BUILD      ?= build
 CC         ?= gcc
 CFLAGS     ?= -O2 -g0
@@ -16,10 +17,10 @@ else
 AL_LIBS    ?= -lopenal
 endif
 
-all: $(BUILD)/hello-mun content
+all: $(BUILD)/$(NAME) content
 
 # -D_GNU_SOURCE is not needed: the sources use C11, POSIX and the two libraries.
-$(BUILD)/hello-mun: $(SRC) $(HDR)
+$(BUILD)/$(NAME): $(SRC) $(HDR)
 	mkdir -p $(BUILD)
 	$(CC) $(WARNINGS) $(CFLAGS) -I$(MUN_DEVKIT)/client/c $(SDL_CFLAGS) -o $@ $(SRC) $(SDL_LIBS) $(AL_LIBS) -lm
 

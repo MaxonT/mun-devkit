@@ -19,6 +19,8 @@ from .errors import MdkError
 
 DEVKIT_ROOT = Path(__file__).resolve().parents[3]
 LOCK_FILE = DEVKIT_ROOT / "mun-os.lock.json"
+# Where `mdk os fetch` puts the pinned MUN OS: the devkit's own copy.
+FETCHED = DEVKIT_ROOT / ".local" / "mun-os"
 
 
 def lock() -> Dict[str, Any]:
@@ -26,9 +28,10 @@ def lock() -> Dict[str, Any]:
 
 
 def find(explicit: Optional[str] = None) -> Path:
-    """The MUN OS checkout: --mun-os, then MUN_OS_DIR, then ../mun-os beside
-    the devkit. It must hold the card tool."""
-    candidates = [explicit, os.environ.get("MUN_OS_DIR"), str(DEVKIT_ROOT.parent / "mun-os")]
+    """The MUN OS checkout: --mun-os, then MUN_OS_DIR, then the copy `mdk os
+    fetch` made (.local/mun-os), then ../mun-os beside the devkit. It must
+    hold the card tool."""
+    candidates = [explicit, os.environ.get("MUN_OS_DIR"), str(FETCHED), str(DEVKIT_ROOT.parent / "mun-os")]
     for candidate in candidates:
         if not candidate:
             continue
@@ -39,8 +42,39 @@ def find(explicit: Optional[str] = None) -> Path:
             raise MdkError("E-OS-TOOLS", f"{root} is not a MUN OS checkout (no tools/mun-card).",
                            "Point --mun-os or MUN_OS_DIR at a checkout of " + lock()["repository"] + ".")
     raise MdkError("E-OS-TOOLS", "No MUN OS checkout found.",
-                   f"Clone {lock()['repository']} beside the devkit, or set MUN_OS_DIR.\n"
+                   "Run `mdk os fetch` to get the pinned revision, or set MUN_OS_DIR to a checkout of "
+                   f"{lock()['repository']}.\n"
                    f"This devkit was checked against {lock()['release']} ({lock()['commit'][:12]}).")
+
+
+def fetch(source: Optional[str] = None) -> Path:
+    """Put the pinned MUN OS revision in .local/mun-os: a clone of the
+    repository the lock names (or of `source`, a path or URL, to avoid the
+    network), at the pinned commit. An existing copy is brought to the pin,
+    never trusted as it is. Returns the checkout, verified against the pin."""
+    pinned = lock()
+    origin = source or pinned["repository"]
+
+    def run(*arguments: str, cwd: Optional[Path] = None) -> None:
+        done = subprocess.run(["git", *arguments], cwd=str(cwd) if cwd else None, capture_output=True, text=True,
+                              check=False, env=_git_environment())
+        if done.returncode != 0:
+            raise MdkError("E-OS-FETCH", f"`git {' '.join(arguments[:2])}` failed while fetching MUN OS.",
+                           f"Check that {origin} is reachable and holds {pinned['commit'][:12]} ({pinned['release']}).",
+                           (done.stderr or done.stdout).strip())
+
+    if not (FETCHED / ".git").exists():
+        FETCHED.parent.mkdir(parents=True, exist_ok=True)
+        run("clone", "--quiet", "--no-checkout", origin, str(FETCHED))
+    elif _git(FETCHED, "cat-file", "-e", pinned["commit"] + "^{commit}") is None:
+        run("fetch", "--quiet", "--tags", origin, cwd=FETCHED)
+    run("-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", pinned["commit"], cwd=FETCHED)
+    found = identity(FETCHED)
+    if found["pin"] != "match":
+        raise MdkError("E-OS-PIN", "The fetched MUN OS is not what the lock describes.",
+                       "The lock's commit, trees and file hashes must agree; see mun-os.lock.json.",
+                       "\n".join(found["differences"]))
+    return FETCHED
 
 
 def _git_environment() -> Dict[str, str]:

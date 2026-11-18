@@ -18,7 +18,8 @@ a console's hardware.
 
 | Part | State |
 | --- | --- |
-| `mdk doctor`, `env`, `build`, `check`, `pack`, `sim` | Work on macOS (Apple Silicon) with a container runtime; Linux expected, not tried |
+| `mdk doctor`, `os`, `env`, `new`, `build`, `check`, `pack`, `sim` | Work on macOS (Apple Silicon) with a container runtime; Linux expected, not tried |
+| MUN OS followed | v0.1.0-dev.5 (`mun-os.lock.json`); the checks also pass with v0.1.0-dev.4's tools |
 | Static C client (`client/c`): session facts, restore and acknowledged save | Tested against the simulator and against save files as a console writes them |
 | Session simulator | Reproduces the session layout, the save service and how a session ends; not the sandbox or any device |
 | Sample `samples/hello-mun` (SDL2, OpenGL, OpenAL; profile `linux-arm64-gl-v0`) | Builds, passes the checks, packs, and runs in the simulator, drawing with Mesa's software renderer |
@@ -31,30 +32,45 @@ say they are measured in virtual machines only.
 ## What you need
 
 - Python 3.9 or later.
-- A checkout of MUN OS beside this one (`../mun-os`), or `MUN_OS_DIR`
-  pointing at one. `mun-os.lock.json` names the revision the devkit was
-  checked against; `mdk` reports the one it finds and says when it differs.
+- MUN OS's own tools, at the revision `mun-os.lock.json` names. `mdk os
+  fetch` clones exactly that revision into `.local/mun-os`; `--mun-os` or
+  `MUN_OS_DIR` name another checkout, and `../mun-os` beside the devkit is
+  used when there is no other. `mdk` reports the revision it finds and says
+  when it differs from the pinned one.
 - e2fsprogs 1.47 or later, to make card images (macOS: `brew install e2fsprogs`).
 - A container runtime that runs `linux/arm64` (`docker`), to build for a
   console. On an ARM64 computer the build runs natively.
 
 `./mdk doctor` checks each of these and says what to do about a missing one.
 
-## From source to a card
+## From nothing to a saved game
 
 ```sh
-./mdk doctor
+./mdk doctor                    # what this computer has and lacks
+./mdk os fetch                  # once: MUN OS's tools at the pinned revision
 ./mdk env build                 # once: the build environment (needs the network)
-cd samples/hello-mun
-../../mdk build                 # compile inside the environment
-../../mdk check                 # the build against its runtime profile
-../../mdk pack                  # build/hello-mun.img, and a record of what is in it
-../../mdk sim --container --env MUN_HELLO_HEADLESS=1 \
-              --env "MUN_HELLO_SCRIPT=up up save wait quit"
+
+./mdk new star-well --title "Star Well" --id org.example.star-well
+cd star-well
+../mdk build                    # compile inside the environment
+../mdk check                    # the build against its runtime profile
+../mdk pack                     # build/star-well.img, and a record of what is in it
+../mdk sim --container --fresh --env MUN_HELLO_HEADLESS=1 \
+           --env "MUN_HELLO_SCRIPT=up up up save wait quit"     # a session that saves
+../mdk sim --container --env MUN_HELLO_HEADLESS=1 \
+           --env "MUN_HELLO_SCRIPT=up save wait quit"           # the next one restores
 ```
 
-`make sample` at the top does the build and the pack; `make check` runs the
-tests this computer can run and names the ones it skipped.
+`mdk new` copies the native sample under the project's name; from then on
+the project is its own. `tests/test_journey.py` runs exactly these steps and
+requires each result. `make sample` at the top builds and packs the sample
+itself; `make check` runs the tests this computer can run and names the ones
+it skipped.
+
+To see the card in MUN OS's virtual console, from the MUN OS checkout
+(`.local/mun-os` after `mdk os fetch`): `./mun get`, `./mun dev run
+--window`, then `./mun dev vm dev card-attach NAME` with the image copied to
+its `.local/gamecards/NAME.img` (MUN OS's `docs/getting-started.md`).
 
 ### The build environment
 

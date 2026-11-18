@@ -1,15 +1,18 @@
 """mdk: the MUN Devkit host tool.
 
     mdk doctor          what this computer has and lacks for each step
+    mdk os fetch        get the MUN OS revision this devkit is pinned to
     mdk env build       build the SDK build environment (once; needs the network)
+    mdk new NAME        start a project from the native sample
     mdk build           build the project inside that environment
     mdk check           inspect the build against its runtime profile
     mdk pack            make the card image with MUN OS's card tool, and record it
     mdk sim             run the game in the session simulator
 
 Run it in a project directory (one with mun-project.toml), or name one with
---project. Packing and the simulator use a MUN OS checkout: ../mun-os beside
-the devkit, MUN_OS_DIR, or --mun-os."""
+--project. Packing and the simulator use MUN OS's own tools from a checkout:
+--mun-os, MUN_OS_DIR, the copy `mdk os fetch` makes, or ../mun-os beside the
+devkit."""
 
 import argparse
 import json
@@ -19,7 +22,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, checks, container, osrepo, pack, project, sim
+from . import __version__, checks, container, new, osrepo, pack, project, sim
 from .errors import MdkError
 
 
@@ -63,6 +66,27 @@ def cmd_doctor(args) -> int:
     for state, name, text in rows:
         print(f"{state:9} {name:16} {text}")
     return 1 if missing else 0
+
+
+def cmd_os(args) -> int:
+    if args.action == "fetch":
+        root = osrepo.fetch(args.source)
+        print(f"fetched  {root}")
+    else:
+        root = osrepo.find(args.mun_os)
+    found = osrepo.identity(root)
+    print(osrepo.describe(found))
+    for line in found["differences"]:
+        print("  " + line)
+    return 0 if found["pin"] != "differs" else 2
+
+
+def cmd_new(args) -> int:
+    mun_os = osrepo.require(args.mun_os)
+    made = new.create(args.name, Path(args.directory or args.name), args.title, args.card_id, mun_os)
+    print(f"created  {made}")
+    print("next     cd there, then: mdk build && mdk pack && mdk sim --container")
+    return 0
 
 
 def cmd_env(args) -> int:
@@ -164,6 +188,15 @@ def parser() -> argparse.ArgumentParser:
         return p
 
     command("doctor", cmd_doctor, "what this computer has and lacks")
+    p = command("os", cmd_os, "the MUN OS revision the devkit works with")
+    p.add_argument("action", choices=("fetch", "info"))
+    p.add_argument("--from", dest="source", metavar="PATH_OR_URL",
+                   help="fetch from this repository instead of the one the lock names (a local clone avoids the network)")
+    p = command("new", cmd_new, "start a project from the native sample")
+    p.add_argument("name", help="the project's name: lowercase letters, digits and '-'")
+    p.add_argument("--directory", metavar="DIR", help="where to make it (default: ./NAME)")
+    p.add_argument("--title", help="the game's title on the card (default: from the name)")
+    p.add_argument("--id", dest="card_id", metavar="ID", help="card.id, which names the save (default: game.NAME)")
     p = command("env", cmd_env, "the SDK build environment")
     p.add_argument("action", choices=("build", "info"))
     command("build", cmd_build, "build the project inside the SDK environment")
