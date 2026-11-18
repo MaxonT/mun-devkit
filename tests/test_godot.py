@@ -1,3 +1,4 @@
+
 """The Godot adapter (engines/godot/addons/mun) and the Godot probe, run by
 the pinned Godot release's Linux ARM64 build, headless, in the session
 simulator inside the SDK environment.
@@ -18,7 +19,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import ROOT
+from support import ROOT, needs
 
 from mdk import container
 from mdk.errors import MdkError
@@ -53,7 +54,7 @@ def ready() -> str:
     return ""
 
 
-@unittest.skipIf(ready(), ready())
+@needs(ready())
 class GodotProbe(unittest.TestCase):
     def setUp(self):
         # Inside the devkit so that the environment can reach it; a development

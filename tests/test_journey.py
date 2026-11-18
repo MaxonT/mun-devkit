@@ -1,3 +1,4 @@
+
 """The whole way from nothing to a saved game, through `mdk` alone: start a
 project, build it for a console, check it, make its card, play a session
 that saves, and play another that restores.
@@ -16,7 +17,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import MUN_OS, ROOT
+from support import MUN_OS, ROOT, needs
 
 from mdk import container, osrepo
 from mdk.errors import MdkError
@@ -39,7 +40,7 @@ def mdk(*arguments, cwd=None):
                           cwd=cwd, timeout=600)
 
 
-@unittest.skipIf(ready(), ready())
+@needs(ready())
 class Journey(unittest.TestCase):
     def setUp(self):
         # Under the devkit, where the environment can reach it.

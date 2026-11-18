@@ -1,3 +1,4 @@
+
 """Packing the sample with MUN OS's card tool: the card is one a console's
 validator accepts, it holds exactly the build, and making it again gives the
 same image. Skipped, with the reason, without the sample's build or e2fsprogs."""
@@ -8,7 +9,7 @@ import subprocess
 import sys
 import unittest
 
-from support import MUN_OS, ROOT, SAMPLE, Scratch
+from support import MUN_OS, ROOT, SAMPLE, Scratch, needs
 
 from mdk import checks, osrepo
 
@@ -23,8 +24,8 @@ def e2fsprogs() -> bool:
         return False
 
 
-@unittest.skipUnless(ENTRY.is_file(), f"{ENTRY.relative_to(ROOT)} is not built (run `make sample`)")
-@unittest.skipUnless(e2fsprogs(), "e2fsprogs (mke2fs, debugfs) is not installed")
+@needs("" if ENTRY.is_file() else f"{ENTRY.relative_to(ROOT)} is not built (run `make sample`)")
+@needs("" if e2fsprogs() else "e2fsprogs (mke2fs, debugfs) is not installed")
 class Pack(Scratch):
     def project_copy(self):
         """The sample's description and build, copied: packing never touches the sample itself."""

@@ -1,3 +1,4 @@
+
 """mdk's checks of a build: what the ELF reader finds and which finding each
 defect produces. Tests that need the sample's AArch64 build are skipped,
 with the reason, when it has not been built (`make sample`)."""
@@ -9,7 +10,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from support import MUN_OS, ROOT, SAMPLE, Scratch
+from support import MUN_OS, ROOT, SAMPLE, Scratch, needs
 
 from mdk import checks, elf, project
 
@@ -77,7 +78,7 @@ class EntryChecks(Scratch):
         self.assertEqual(codes(errors), ["E-NOT-ELF"])
 
 
-@unittest.skipUnless(ENTRY.is_file(), f"{ENTRY.relative_to(ROOT)} is not built (run `make sample`)")
+@needs("" if ENTRY.is_file() else f"{ENTRY.relative_to(ROOT)} is not built (run `make sample`)")
 class RealEntry(Scratch):
     def test_what_the_reader_finds_in_the_sample(self):
         info = elf.read(ENTRY)

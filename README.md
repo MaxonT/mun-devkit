@@ -65,7 +65,7 @@ cd star-well
 the project is its own. `tests/test_journey.py` runs exactly these steps and
 requires each result. `make sample` at the top builds and packs the sample
 itself; `make check` runs the tests this computer can run and names the ones
-it skipped.
+it skipped, and `make check-full` fails on any it cannot run.
 
 To see the card in MUN OS's virtual console, from the MUN OS checkout
 (`.local/mun-os` after `mdk os fetch`): `./mun get`, `./mun dev run

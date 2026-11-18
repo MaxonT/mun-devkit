@@ -1,3 +1,4 @@
+
 """The native sample, as built for a console (AArch64 Linux), run in the
 session simulator inside the SDK environment: content, save and restore,
 refusals, and every way a session ends. What this establishes is that the
@@ -13,7 +14,7 @@ import subprocess
 import sys
 import unittest
 
-from support import ROOT, SAMPLE
+from support import ROOT, SAMPLE, needs
 
 from mdk import container
 from mdk.errors import MdkError
@@ -34,7 +35,7 @@ def environment_ready() -> str:
     return ""
 
 
-@unittest.skipIf(environment_ready(), environment_ready())
+@needs(environment_ready())
 class Sample(unittest.TestCase):
     def session(self, script=None, *options, headless=True):
         """One simulated session; returns (its record, the game's log)."""

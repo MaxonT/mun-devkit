@@ -1,3 +1,4 @@
+
 """Shared by the tests: the devkit's paths, the MUN OS checkout, and a way to
 talk to a save socket as a game would."""
 
@@ -19,6 +20,24 @@ from mdk import osrepo, sim  # noqa: E402
 MUN_OS = osrepo.find()
 SAVES = osrepo.mun_card(MUN_OS).saves
 SAMPLE = ROOT / "samples" / "hello-mun"
+
+
+def needs(reason: str):
+    """For a test class that needs something this computer may lack (the SDK
+    environment, the sample's build, the engine): `reason` is why it cannot
+    run, or "" when it can. The class is then skipped with that reason; with
+    MDK_REQUIRE_ALL=1 (`make check-full`) it fails instead, so that a check
+    used as a gate cannot pass by not running."""
+    def wrap(cls):
+        if not reason:
+            return cls
+        if os.environ.get("MDK_REQUIRE_ALL") == "1":
+            def refuse(klass):
+                raise AssertionError(f"required, and not possible here: {reason}")
+            cls.setUpClass = classmethod(refuse)
+            return cls
+        return unittest.skip(reason)(cls)
+    return wrap
 
 
 class Scratch(unittest.TestCase):
