@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: Apache-2.0
+
 /* munc: a command-line face of the client, for the tests. Each command
  * prints "status=<name>" and the fields the call filled, one per line.
  *

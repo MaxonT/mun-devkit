@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """The SDK build environment: a pinned Debian 13 ARM64 container with the
 compiler and the development packages of the libraries a console provides,
 taken from the same dated Debian snapshot MUN OS's image is built from

@@ -1,3 +1,5 @@
+; Copyright 2026 Iván Moreno Mendoza
+; SPDX-License-Identifier: MIT-0
 ; MUN Hello for Godot 4.7: the devkit's Godot probe.
 
 config_version=5

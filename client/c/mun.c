@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 /* mun.c — see mun.h. C11 and POSIX; no other dependency. */
 #define _POSIX_C_SOURCE 200809L
 #define _DARWIN_C_SOURCE 1

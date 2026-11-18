@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 /* The sample's configuration, read from the card's content. */
 #ifndef HELLO_CONFIG_H
 #define HELLO_CONFIG_H

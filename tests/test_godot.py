@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 
 """The Godot adapter (engines/godot/addons/mun) and the Godot probe, run by
 the pinned Godot release's Linux ARM64 build, headless, in the session

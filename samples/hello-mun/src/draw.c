@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 #include "draw.h"
 
 #include <stdio.h>

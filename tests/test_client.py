@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """The static C client (client/c) against the simulator's save service and
 against save files as a console leaves them: every status it can return."""
 

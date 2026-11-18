@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 # The MUN Devkit build environment: Debian 13 (trixie), ARM64, with the
 # compiler and the development packages of the libraries the runtime profile
 # linux-arm64-gl-v0 provides on a console.

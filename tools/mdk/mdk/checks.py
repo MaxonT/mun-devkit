@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """What mdk can tell about a build before a card is made of it.
 
 Each finding has a stable code, a sentence and a next step. Errors are things

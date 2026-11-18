@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 /* mun.h — static client for the contracts MUN OS gives a game session.
  *
  * It covers what a console implements today: the session's facts (environment

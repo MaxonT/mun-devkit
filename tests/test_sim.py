@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """The simulator's save service against the console's contract (MUN OS
 docs/saves.md): what a request must be, what each refusal says, what the
 card holds afterwards, and what a session is handed back."""

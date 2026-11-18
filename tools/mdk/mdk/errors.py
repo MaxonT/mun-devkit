@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """One error type for everything mdk tells the developer."""
 
 

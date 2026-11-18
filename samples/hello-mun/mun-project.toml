@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: MIT-0
 # MUN Hello: the devkit's native sample. `mdk build`, `mdk check`, `mdk pack`
 # and `mdk sim` read this file.
 

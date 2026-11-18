@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 
 """Packing the sample with MUN OS's card tool: the card is one a console's
 validator accepts, it holds exactly the build, and making it again gives the

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 """mdk: the MUN Devkit host tool. See `mdk --help` and README.md."""
 import sys
 from pathlib import Path

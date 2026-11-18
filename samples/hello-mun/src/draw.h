@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 /* Drawing for MUN Hello: flat rectangles and a 3x5 pixel typeface, on the
  * fixed-function OpenGL a GL-profile game gets through SDL2. Coordinates are
  * pixels, origin at the top left. One thread, the one that owns the context. */

@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """`mdk os fetch`: the devkit's own copy of the pinned MUN OS revision is a
 clone at exactly the pinned commit, a stale copy is brought to it, and a
 repository that does not hold what the lock describes is refused."""

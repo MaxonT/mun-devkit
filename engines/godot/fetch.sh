@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 # Fetch the pinned Godot release the adapter is checked with into
 # .local/godot/<version>/ and verify it. A file already there is verified,
 # never trusted unchecked. Needs curl, unzip and shasum or sha512sum.

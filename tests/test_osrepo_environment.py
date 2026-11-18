@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """The MUN OS revision mdk reports when Git's own variables point elsewhere.
 
 A Git hook exports GIT_DIR, GIT_INDEX_FILE and GIT_WORK_TREE, and whatever it

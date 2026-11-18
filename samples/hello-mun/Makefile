@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: MIT-0
 # MUN Hello. Built by `mdk build` inside the SDK environment, which has the
 # console's own library versions; `make host` builds it for the developer's
 # own computer where SDL2 and OpenAL exist, for a look at it in a window.

@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 #include "config.h"
 
 #include <ctype.h>

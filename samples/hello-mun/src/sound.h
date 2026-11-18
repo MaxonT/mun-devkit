@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 /* MUN Hello's sounds, through OpenAL as the GL profile provides it. A
  * machine without a sound device plays nothing and the game goes on. */
 #ifndef HELLO_SOUND_H

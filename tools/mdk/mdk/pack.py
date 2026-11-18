@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """Make a card image of a project with MUN OS's own card tool, and record
 what went into it.
 

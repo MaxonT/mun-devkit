@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 
 """The native sample, as built for a console (AArch64 Linux), run in the
 session simulator inside the SDK environment: content, save and restore,

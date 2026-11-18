@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: MIT-0
+
 extends Node
 ## What a MUN console gives a game session, for Godot 4.7: the session's
 ## facts, the save the console restored, and acknowledged saves on the Game

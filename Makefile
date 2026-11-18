@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 # MUN Devkit. `make check` runs what this computer can run and says what it
 # skipped; `make check-full` fails on what it cannot run; `make sample`
 # builds and packs the native sample.

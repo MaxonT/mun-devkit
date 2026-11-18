@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: MIT-0
+
 extends Control
 ## MUN Hello for Godot: the same small game as the native sample, through the
 ## Godot adapter. A count the player changes, a sound on each change, a save

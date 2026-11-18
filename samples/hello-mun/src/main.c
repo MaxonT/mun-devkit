@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 /* MUN Hello: the devkit's native sample.
  *
  * A complete game for the runtime profile linux-arm64-gl-v0, as small as one

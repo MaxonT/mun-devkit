@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """A session simulator: run a game on a development computer with the
 contracts a MUN console gives it, and nothing more.
 

@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """Read what mdk needs from an ELF file: what it is built for, which shared
 libraries it asks for, and which glibc it needs. Pure Python; the file is
 untrusted input and every offset is checked against its size."""

@@ -10,7 +10,9 @@ For Godot 4.7 (checked with 4.7.2-stable, the official Linux ARM64 build).
 
 ## The adapter
 
-Copy or link `addons/mun` into the project and add the autoload:
+Copy or link `addons/mun` into the project and add the autoload. The
+add-on is under MIT No Attribution: it becomes part of your project with
+nothing to include.
 
 ```ini
 [autoload]

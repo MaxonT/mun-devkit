@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """mdk: the MUN Devkit host tool.
 
     mdk doctor          what this computer has and lacks for each step

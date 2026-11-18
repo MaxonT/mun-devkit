@@ -169,10 +169,21 @@ samples/hello-mun-godot/   the same small game as a Godot project
 engines/godot/         the Godot adapter, and how to fetch the pinned engine
 tests/                 host tests; the sample's run in the environment
 mun-os.lock.json       the MUN OS revision the devkit was checked against
+LICENSE, LICENSES/     the licence texts; docs/licensing.md says which covers what
 ```
 
 ## Licence
 
-No licence has been chosen for this repository yet.
-[docs/third-party.md](docs/third-party.md) lists what it uses and under
-which terms.
+Three licences, by where each part ends up ([licensing](docs/licensing.md)):
+
+- the tools, under the [Apache License 2.0](LICENSE);
+- the client a game compiles in (`client/c`), under the Apache License 2.0
+  with the LLVM Exceptions, so that a game ships it with nothing to include;
+- the samples, the engine add-ons and what `mdk new` copies, under
+  [MIT No Attribution](LICENSES/MIT-0.txt): yours to use as you like.
+
+The devkit is free to make, test and distribute games with. Publishing on
+an official MUN Disk is a separate service with its own agreement, and the
+MUN and Play MUN names and logos are not licensed
+([NAME-AND-LOGO.txt](NAME-AND-LOGO.txt)).
+[docs/third-party.md](docs/third-party.md) lists what the devkit uses.

@@ -1,0 +1,19 @@
+The MUN and Play MUN names and logos
+
+The MUN name, the Play MUN name, the MUN logo and the Play MUN logo belong
+to Iván Moreno Mendoza, who develops MUN as Play MUN; MUN™ is his
+trademark. None of the licences that cover MUN Devkit's own work (the
+Apache License 2.0, with or without the LLVM Exceptions, and MIT No
+Attribution) grants any right to them. These are their terms:
+
+- Saying truthfully that a game was made with MUN Devkit, or that it runs
+  on MUN or on MUN OS, is fine.
+- A game, a tool or another product may not use the MUN or Play MUN names
+  or logos to present itself as official, as endorsed by Play MUN, or as an
+  official MUN Disk edition. Those come from an agreement with Play MUN,
+  not from these licences.
+- A modified version or a fork of MUN Devkit distributed to others takes
+  its own name, and does not present itself as MUN Devkit or as Play MUN's.
+
+For anything else, ask: hello@playmun.com.
+MUN Devkit's source: https://github.com/Play-MUN/mun-devkit

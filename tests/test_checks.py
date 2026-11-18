@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 
 """mdk's checks of a build: what the ELF reader finds and which finding each
 defect produces. Tests that need the sample's AArch64 build are skipped,

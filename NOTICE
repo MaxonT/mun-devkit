@@ -1,0 +1,19 @@
+MUN Devkit
+Copyright 2026 Iván Moreno Mendoza
+
+MUN is developed by Play MUN, the studio of Iván Moreno Mendoza, who holds
+the rights to MUN Devkit's own work and to the MUN and Play MUN names and
+logos.
+
+MUN Devkit's own work is licensed in three parts, by where each ends up
+(docs/licensing.md): its tools under the Apache License, Version 2.0 (see
+LICENSE); the client a game compiles in under the Apache License, Version
+2.0 with the LLVM Exceptions (LICENSES/Apache-2.0.txt and
+LICENSES/LLVM-exception.txt); its samples and engine add-ons under MIT No
+Attribution (LICENSES/MIT-0.txt). The MUN and Play MUN names and logos are
+not licensed under any of them; their terms are in NAME-AND-LOGO.txt, beside
+this file. MUN™ is a trademark of Iván Moreno Mendoza.
+
+Third-party components keep their own copyright notices and licences;
+docs/third-party.md lists what the devkit uses. Contributions remain their
+authors' and are licensed under the same terms.

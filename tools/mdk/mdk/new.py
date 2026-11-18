@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """Start a project: a copy of the native sample under a new name, ready for
 `mdk build`, `mdk check`, `mdk pack` and `mdk sim`.
 

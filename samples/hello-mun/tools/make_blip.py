@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: MIT-0
 """Write the sample's sound: a short 880 Hz tone with a soft start and end,
 PCM 16-bit mono at 48 kHz. Deterministic: the same bytes every time."""
 import math

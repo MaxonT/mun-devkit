@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 
 """The whole way from nothing to a saved game, through `mdk` alone: start a
 project, build it for a console, check it, make its card, play a session

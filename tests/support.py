@@ -1,3 +1,5 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
 
 """Shared by the tests: the devkit's paths, the MUN OS checkout, and a way to
 talk to a save socket as a game would."""

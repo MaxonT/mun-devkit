@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 /* Host checks of the sample's own logic: the game state, its save payload
  * and the configuration reader. No SDL and no console. */
 #include <stdio.h>

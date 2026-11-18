@@ -1,3 +1,6 @@
+# Copyright 2026 Iván Moreno Mendoza
+# SPDX-License-Identifier: Apache-2.0
+
 """A project's description, mun-project.toml, read with the same strict TOML
 subset MUN OS reads a card's manifest with.
 

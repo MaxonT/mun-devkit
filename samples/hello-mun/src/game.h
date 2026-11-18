@@ -1,3 +1,6 @@
+// Copyright 2026 Iván Moreno Mendoza
+// SPDX-License-Identifier: MIT-0
+
 /* MUN Hello's whole game: a count the player raises and lowers, and how many
  * times it has been saved. No SDL, no console: plain C that the host tests
  * run as it is. */
