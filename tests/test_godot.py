@@ -21,7 +21,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import ROOT, needs
+from support import ROOT, isolate_git, needs
 
 from mdk import container
 from mdk.errors import MdkError
@@ -59,6 +59,7 @@ def ready() -> str:
 @needs(ready())
 class GodotProbe(unittest.TestCase):
     def setUp(self):
+        isolate_git(self)
         # Inside the devkit so that the environment can reach it; a development
         # stand-in for an exported game: the entry starts the engine on the project.
         self.project = Path(tempfile.mkdtemp(prefix="godot-probe-", dir=str(ROOT / ".local")))

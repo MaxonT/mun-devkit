@@ -16,7 +16,7 @@ import subprocess
 import sys
 import unittest
 
-from support import ROOT, SAMPLE, needs
+from support import ROOT, SAMPLE, isolate_git, needs
 
 from mdk import container
 from mdk.errors import MdkError
@@ -54,6 +54,7 @@ class Sample(unittest.TestCase):
             self.fail(f"no session record:\n{done.stdout}\n{done.stderr}")
 
     def setUp(self):
+        isolate_git(self)
         shutil.rmtree(SAMPLE / "build" / "sim-card", ignore_errors=True)
 
     def test_new_game_save_quit_then_restore(self):

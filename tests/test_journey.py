@@ -19,7 +19,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import MUN_OS, ROOT, needs
+from support import MUN_OS, ROOT, isolate_git, needs
 
 from mdk import container, osrepo
 from mdk.errors import MdkError
@@ -45,6 +45,7 @@ def mdk(*arguments, cwd=None):
 @needs(ready())
 class Journey(unittest.TestCase):
     def setUp(self):
+        isolate_git(self)
         # Under the devkit, where the environment can reach it.
         (ROOT / ".local").mkdir(exist_ok=True)
         self.holder = Path(tempfile.mkdtemp(prefix="journey-", dir=str(ROOT / ".local")))

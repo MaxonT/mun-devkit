@@ -26,8 +26,8 @@ def clean_environment():
 
 
 def git(directory: Path, *arguments: str) -> str:
-    done = subprocess.run(["git", "-C", str(directory), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
-                           *arguments], capture_output=True, text=True, check=True, env=clean_environment())
+    done = subprocess.run(["git", "-C", str(directory), *arguments], capture_output=True, text=True, check=True,
+                          env=clean_environment())
     return done.stdout.strip()
 
 

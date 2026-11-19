@@ -17,11 +17,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "mdk"))
 
+import gitenv  # noqa: E402
 from mdk import osrepo, sim  # noqa: E402
 
 MUN_OS = osrepo.find()
 SAVES = osrepo.mun_card(MUN_OS).saves
 SAMPLE = ROOT / "samples" / "hello-mun"
+
+
+def isolate_git(test: unittest.TestCase) -> None:
+    """Give `test` Git of its own (tests/gitenv.py) until it ends: every git
+    it starts, and every git the code it runs starts, sees neither the
+    developer's configuration nor a hook's variables."""
+    holder = Path(tempfile.mkdtemp(prefix="mdk-git-", dir="/tmp"))
+    test.addCleanup(shutil.rmtree, holder, True)
+    gitenv.isolate(test, holder)
+
+
+def unavailable(test: unittest.TestCase, reason: str) -> None:
+    """End `test` because it cannot run here: skipped, or failed under
+    MDK_REQUIRE_ALL=1 (`make check-full`)."""
+    if os.environ.get("MDK_REQUIRE_ALL") == "1":
+        test.fail(f"required, and not possible here: {reason}")
+    test.skipTest(reason)
 
 
 def needs(reason: str):
@@ -48,6 +66,7 @@ class Scratch(unittest.TestCase):
     def setUp(self):
         self.scratch = Path(tempfile.mkdtemp(prefix="mdk-", dir="/tmp"))
         self.addCleanup(shutil.rmtree, self.scratch, True)
+        isolate_git(self)
 
     def card(self, card_id="mun.test", version="1.0.0"):
         return sim.SimCard(self.scratch / "card", card_id, version, SAVES)

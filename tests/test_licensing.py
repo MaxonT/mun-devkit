@@ -9,7 +9,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from support import ROOT
+from support import ROOT, isolate_git, unavailable
 
 from mdk import osrepo
 
@@ -34,11 +34,16 @@ def tracked():
     return [line for line in done.stdout.splitlines() if line] if done.returncode == 0 else None
 
 
-@unittest.skipIf(tracked() is None, "not a Git checkout")
 class Licensing(unittest.TestCase):
+    def setUp(self):
+        isolate_git(self)
+        self.tracked = tracked()
+        if self.tracked is None:
+            unavailable(self, "not a Git checkout")
+
     def test_every_file_names_the_licence_of_its_part(self):
         wrong = []
-        for path in tracked():
+        for path in self.tracked:
             file = ROOT / path
             if file.is_symlink() or file.name in WITHOUT_HEADER_NAMES or file.suffix in WITHOUT_HEADER:
                 continue
