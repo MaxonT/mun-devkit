@@ -38,7 +38,7 @@ import selectors
 import shutil
 import signal
 import socket
-import subprocess
+import subprocess  # nosec B404: starts the game a session is simulated for
 import tempfile
 import threading
 import time
@@ -558,7 +558,7 @@ def run_session(entry: Path, card: SimCard, profile: str, content: Optional[Path
     try:
         game = dest / "game"
         shutil.copyfile(entry, game)
-        os.chmod(game, 0o555)                       # the console's copy is read-only
+        os.chmod(game, 0o500)                       # the console's copy is read-only; here, the user's alone
         record["restore"] = card.restore(work / "save.json")
         facts = {"CARD_ID": card.info["id"], "CONTENT_VERSION": card.info["version"], "SESSION": session,
                  "RUNTIME_PROFILE": profile, "SAVE_FILE": str(work / "save.json"), "SAVE_SOCKET": str(dest / "save.sock")}
@@ -577,7 +577,8 @@ def run_session(entry: Path, card: SimCard, profile: str, content: Optional[Path
         reached = STOP_STATES[stop_when]
         started = time.monotonic()
         try:
-            process = subprocess.Popen([str(game)], cwd=str(work), env=environment, stdin=subprocess.DEVNULL)
+            process = subprocess.Popen(  # nosec B603: the developer's own entry, no arguments, no shell: running it is what a session is
+                [str(game)], cwd=str(work), env=environment, stdin=subprocess.DEVNULL)
         except OSError as exc:
             if exc.errno == errno.ENOEXEC:
                 raise MdkError("E-HOST-ARCH", f"{entry} cannot run on this computer.",

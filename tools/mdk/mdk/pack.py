@@ -9,7 +9,7 @@ with the validator the console runs, and `mun-card inspect` reads the result
 back the way a console would. mdk adds the checks before, and a record after."""
 
 import json
-import subprocess
+import subprocess  # nosec B404: runs MUN OS's card tool from the pinned checkout
 from pathlib import Path
 from typing import Any, Dict
 
@@ -38,14 +38,16 @@ def pack(project: Project, mun_os: Path) -> Dict[str, Any]:
         if card.get(option):
             value = str(project.path(card[option])) if option == "cover" else card[option]
             command.append(f"--{option}={value}")
-    created = subprocess.run(command, capture_output=True, text=True, check=False)
+    created = subprocess.run(  # nosec B603: this Python and the pinned card tool, no shell; values go as --name=VALUE or absolute paths
+        command, capture_output=True, text=True, check=False)
     print(created.stdout, end="")
     if created.returncode != 0:
         raise MdkError("E-CARD-TOOL", "MUN OS's card tool refused to make the card.",
                        "Its message is above; the codes are listed in MUN OS's docs/game-cards.md.",
                        (created.stderr or created.stdout).strip())
-    inspected = subprocess.run(tool + ["inspect", str(project.image), "--json"], capture_output=True, text=True,
-                               check=False)
+    inspected = subprocess.run(  # nosec B603: this Python and the pinned checkout's card tool, no shell, on the image just made
+        tool + ["inspect", str(project.image), "--json"], capture_output=True, text=True,
+        check=False)
     try:
         seen = json.loads(inspected.stdout)
     except ValueError:

@@ -20,7 +20,7 @@ devkit."""
 import argparse
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404: only names CalledProcessError, a failed tool's error; this module starts nothing
 import sys
 from pathlib import Path
 from typing import List, Optional

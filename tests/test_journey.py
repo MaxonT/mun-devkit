@@ -13,7 +13,7 @@ Skipped, with the reason, without the SDK environment or e2fsprogs."""
 
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404: runs mdk as a developer would
 import sys
 import tempfile
 import unittest
@@ -38,8 +38,9 @@ def ready() -> str:
 
 
 def mdk(*arguments, cwd=None):
-    return subprocess.run([sys.executable, str(ROOT / "mdk"), *arguments], capture_output=True, text=True,
-                          cwd=cwd, timeout=600)
+    return subprocess.run(  # nosec B603: this Python and this repository's mdk, no shell, with arguments the test wrote
+        [sys.executable, str(ROOT / "mdk"), *arguments], capture_output=True, text=True,
+        cwd=cwd, timeout=600)
 
 
 @needs(ready())

@@ -13,7 +13,7 @@ reports which revision that was against the one this devkit was checked with
 import hashlib
 import json
 import os
-import subprocess
+import subprocess  # nosec B404: asks Git about the MUN OS checkout and fetches it; each call is reviewed on its line
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -59,8 +59,9 @@ def fetch(source: Optional[str] = None) -> Path:
     origin = source or pinned["repository"]
 
     def run(*arguments: str, cwd: Optional[Path] = None) -> None:
-        done = subprocess.run(["git", *arguments], cwd=str(cwd) if cwd else None, capture_output=True, text=True,
-                              check=False, env=_git_environment())
+        done = subprocess.run(  # nosec B603, B607: no shell; the source follows `--`; git from PATH on purpose: the developer's
+            ["git", *arguments], cwd=str(cwd) if cwd else None, capture_output=True, text=True,
+            check=False, env=_git_environment())
         if done.returncode != 0:
             raise MdkError("E-OS-FETCH", f"`git {' '.join(arguments[:2])}` failed while fetching MUN OS.",
                            f"Check that {origin} is reachable and holds {pinned['commit'][:12]} ({pinned['release']}).",
@@ -90,8 +91,9 @@ def _git_environment() -> Dict[str, str]:
     inherits them: `git -C DIR` would then still answer for the hook's
     repository, and mdk would report its revision as MUN OS's."""
     try:
-        local = subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True,
-                               check=False).stdout.split()
+        local = subprocess.run(  # nosec B603, B607: no shell, fixed arguments; git from PATH on purpose: the developer's
+            ["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True,
+            check=False).stdout.split()
     except OSError:
         local = []
     return {key: value for key, value in os.environ.items() if key not in set(local)}
@@ -99,8 +101,9 @@ def _git_environment() -> Dict[str, str]:
 
 def _git(root: Path, *args: str) -> Optional[str]:
     try:
-        done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=False,
-                              env=_git_environment())
+        done = subprocess.run(  # nosec B603, B607: no shell; this module's own arguments on a checkout; git from PATH on purpose: the developer's
+            ["git", "-C", str(root), *args], capture_output=True, text=True, check=False,
+            env=_git_environment())
     except OSError:
         return None
     return done.stdout.strip() if done.returncode == 0 else None
@@ -170,7 +173,7 @@ def mun_card(root: Path):
     path = str(root / "tools" / "mun-card")
     if path not in sys.path:
         sys.path.insert(0, path)
-    import mun_card  # noqa: F401  (the package initialises its submodules lazily)
+    import mun_card  # and each submodule by name: the package initialises them lazily
     import mun_card.image
     import mun_card.minitoml
     import mun_card.saves

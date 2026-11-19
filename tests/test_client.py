@@ -25,7 +25,7 @@ class Client(Scratch):
         import shutil
         import tempfile
         from pathlib import Path
-        cls.build = Path(tempfile.mkdtemp(prefix="munc-", dir="/tmp"))
+        cls.build = Path(tempfile.mkdtemp(prefix="munc-", dir="/tmp"))  # nosec B108: a private mkdtemp directory; /tmp keeps a socket's path short
         cls.addClassCleanup(shutil.rmtree, cls.build, True)
         cls.program = compile_munc(cls.build)
 
@@ -153,7 +153,8 @@ class Client(Scratch):
     def test_socket_failures(self):
         self.assertEqual(self.run_munc(["write", "1", "500"], b'{"n":1}',
                                        save_socket=self.scratch / "nothing.sock")["status"], "io")
-        self.assertEqual(self.run_munc(["write", "1", "500"], b'{"n":1}', save_socket="/tmp/" + "x" * 200)["status"], "io")
+        too_long = "/tmp/" + "x" * 200  # nosec B108: never created: a path too long to be a socket's
+        self.assertEqual(self.run_munc(["write", "1", "500"], b'{"n":1}', save_socket=too_long)["status"], "io")
 
     def fake_console(self, reply: bytes):
         """A listener that reads a request and answers with `reply` (or just closes)."""

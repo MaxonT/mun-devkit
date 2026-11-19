@@ -5,9 +5,8 @@ its part of the repository, and the licence texts are in place.
 
 Checked over the files Git tracks; skipped outside a Git checkout."""
 
-import subprocess
+import subprocess  # nosec B404: asks Git which files it tracks
 import unittest
-from pathlib import Path
 
 from support import ROOT, isolate_git, unavailable
 
@@ -29,8 +28,9 @@ def expected(path: str) -> str:
 
 
 def tracked():
-    done = subprocess.run(["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True,
-                          env=osrepo._git_environment())
+    done = subprocess.run(  # nosec B603, B607: no shell, fixed arguments; git from PATH on purpose: the developer's
+        ["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True,
+        env=osrepo._git_environment())
     return [line for line in done.stdout.splitlines() if line] if done.returncode == 0 else None
 
 

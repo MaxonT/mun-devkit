@@ -10,7 +10,7 @@ repository, in a temporary folder, and requires the answer to be the
 checkout's own and the decoy to be exactly as it was."""
 
 import os
-import subprocess
+import subprocess  # nosec B404: makes Git repositories for the tests
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -21,13 +21,15 @@ from mdk import osrepo
 
 
 def clean_environment():
-    local = subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True).stdout.split()
+    local = subprocess.run(  # nosec B603, B607: no shell, fixed arguments; git from PATH on purpose: the developer's
+        ["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True).stdout.split()
     return {key: value for key, value in os.environ.items() if key not in local}
 
 
 def git(directory: Path, *arguments: str) -> str:
-    done = subprocess.run(["git", "-C", str(directory), *arguments], capture_output=True, text=True, check=True,
-                          env=clean_environment())
+    done = subprocess.run(  # nosec B603, B607: no shell, a test's own arguments on a repository it made; git from PATH on purpose: the developer's
+        ["git", "-C", str(directory), *arguments], capture_output=True, text=True, check=True,
+        env=clean_environment())
     return done.stdout.strip()
 
 

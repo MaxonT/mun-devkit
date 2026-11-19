@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "tools" / "mdk"))
-from mdk.cli import main  # noqa: E402
+from mdk.cli import main  # after the path above, on purpose
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))

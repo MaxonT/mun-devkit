@@ -25,10 +25,15 @@ static ALuint buffers[SOUND_COUNT_], sources[SOUND_COUNT_];
 static int blip_from_file;
 static char device_name[96] = "none";
 
-/* A tone that glides from `from` to `to` Hz, with a soft start and end. */
-static void tone(ALuint buffer, double from, double to, double seconds, double peak)
+/* A tone that glides from `from` to `to` Hz, with a soft start and end.
+ * Its length is a whole number of milliseconds, at most two seconds, so
+ * that the size of what is allocated is integer arithmetic on a bounded
+ * value. */
+static void tone(ALuint buffer, double from, double to, int milliseconds, double peak)
 {
-    int frames = (int)(RATE * seconds);
+    if (milliseconds < 1 || milliseconds > 2000)
+        return;
+    int frames = RATE / 1000 * milliseconds;
     short *samples = malloc((size_t)frames * sizeof *samples);
     if (!samples)
         return;
@@ -105,9 +110,9 @@ int sound_open(const char *blip_path)
     alGenSources(SOUND_COUNT_, sources);
     blip_from_file = blip_path && load_wav(buffers[SOUND_BLIP], blip_path);
     if (!blip_from_file)
-        tone(buffers[SOUND_BLIP], 660, 660, 0.07, 0.5);
-    tone(buffers[SOUND_SAVED], 660, 1320, 0.22, 0.5);
-    tone(buffers[SOUND_REFUSED], 220, 160, 0.30, 0.5);
+        tone(buffers[SOUND_BLIP], 660, 660, 70, 0.5);
+    tone(buffers[SOUND_SAVED], 660, 1320, 220, 0.5);
+    tone(buffers[SOUND_REFUSED], 220, 160, 300, 0.5);
     for (int i = 0; i < SOUND_COUNT_; i++)
         alSourcei(sources[i], AL_BUFFER, (ALint)buffers[i]);
     return 1;

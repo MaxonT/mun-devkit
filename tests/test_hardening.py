@@ -13,10 +13,9 @@ The tests of built programs are skipped, with the reason, without the SDK
 environment or the sample's build (`make sample`)."""
 
 import json
-import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404: runs make and mdk as a developer would
 import sys
 import tempfile
 import unittest
@@ -166,7 +165,8 @@ class Probing(Scratch):
         (self.scratch / "Makefile").write_text(self.MAKEFILE.format(root=ROOT), encoding="utf-8")
 
     def flags(self, *settings):
-        done = subprocess.run(["make", "-s", "-C", str(self.scratch), "show", *settings], capture_output=True, text=True)
+        done = subprocess.run(  # nosec B603, B607: no shell; make from PATH, the developer's, on a makefile the test wrote
+            ["make", "-s", "-C", str(self.scratch), "show", *settings], capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         fields = dict(line.split("=", 1) for line in done.stdout.splitlines() if "=" in line)
         return fields["C"].split(), fields["L"].split()
@@ -249,8 +249,9 @@ class Built(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.holder, True)
 
     def mdk(self, *arguments):
-        return subprocess.run([sys.executable, str(ROOT / "mdk"), *arguments, "--project", str(self.holder)],
-                              capture_output=True, text=True, timeout=600)
+        return subprocess.run(  # nosec B603: this Python and this repository's mdk, no shell, with arguments the test wrote
+            [sys.executable, str(ROOT / "mdk"), *arguments, "--project", str(self.holder)],
+            capture_output=True, text=True, timeout=600)
 
     def describe(self, run: str, hardening: str = "") -> None:
         (self.holder / "game.c").write_text(SOURCE, encoding="utf-8")

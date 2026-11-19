@@ -12,7 +12,7 @@ import json
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404: asks Git for the devkit's own revision, once
 from pathlib import Path
 from typing import Optional
 
@@ -43,8 +43,9 @@ the devkit this project builds with (`{devkit}` from here).
 
 def devkit_revision() -> Optional[str]:
     try:
-        done = subprocess.run(["git", "-C", str(osrepo.DEVKIT_ROOT), "rev-parse", "HEAD"], capture_output=True,
-                              text=True, check=False, env=osrepo._git_environment())
+        done = subprocess.run(  # nosec B603, B607: no shell, fixed arguments and the devkit's own path; git from PATH on purpose: the developer's
+            ["git", "-C", str(osrepo.DEVKIT_ROOT), "rev-parse", "HEAD"], capture_output=True,
+            text=True, check=False, env=osrepo._git_environment())
     except OSError:
         return None
     return done.stdout.strip() if done.returncode == 0 else None

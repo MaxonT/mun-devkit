@@ -12,7 +12,7 @@ the sample's build (`make sample`)."""
 import hashlib
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404: runs mdk as a developer would
 import sys
 import unittest
 
@@ -47,7 +47,8 @@ class Sample(unittest.TestCase):
             command += ["--env", "MUN_HELLO_HEADLESS=1"]
         if script is not None:
             command += ["--env", f"MUN_HELLO_SCRIPT={script}"]
-        done = subprocess.run(command, capture_output=True, text=True, timeout=600)
+        done = subprocess.run(  # nosec B603: this Python and this repository's mdk, no shell, with arguments the test wrote
+            command, capture_output=True, text=True, timeout=600)
         try:
             return json.loads(done.stdout), done.stderr
         except ValueError:

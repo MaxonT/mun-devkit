@@ -8,7 +8,7 @@ import json
 import os
 import shutil
 import socket
-import subprocess
+import subprocess  # nosec B404: the tests compile the client's test program and run it
 import sys
 import tempfile
 import unittest
@@ -17,8 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "mdk"))
 
-import gitenv  # noqa: E402
-from mdk import osrepo, sim  # noqa: E402
+import gitenv  # these two after the path above, on purpose
+from mdk import osrepo, sim
 
 # How long a test waits for something that must happen before it gives up
 # and fails. It bounds a failure and never decides a result: no test passes
@@ -34,7 +34,7 @@ def isolate_git(test: unittest.TestCase) -> None:
     """Give `test` Git of its own (tests/gitenv.py) until it ends: every git
     it starts, and every git the code it runs starts, sees neither the
     developer's configuration nor a hook's variables."""
-    holder = Path(tempfile.mkdtemp(prefix="mdk-git-", dir="/tmp"))
+    holder = Path(tempfile.mkdtemp(prefix="mdk-git-", dir="/tmp"))  # nosec B108: a private mkdtemp directory; /tmp keeps the paths short
     test.addCleanup(shutil.rmtree, holder, True)
     gitenv.isolate(test, holder)
 
@@ -69,7 +69,7 @@ class Scratch(unittest.TestCase):
     """A test with a short scratch directory (a UNIX socket's path is limited)."""
 
     def setUp(self):
-        self.scratch = Path(tempfile.mkdtemp(prefix="mdk-", dir="/tmp"))
+        self.scratch = Path(tempfile.mkdtemp(prefix="mdk-", dir="/tmp"))  # nosec B108: a private mkdtemp directory; /tmp keeps a socket's path short
         self.addCleanup(shutil.rmtree, self.scratch, True)
         isolate_git(self)
 
@@ -154,7 +154,8 @@ def compile_munc(directory: Path) -> Path:
     sources = [str(ROOT / "client" / "c" / "tests" / "munc.c"), str(ROOT / "client" / "c" / "mun.c")]
     common = [compiler, "-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-g", f"-I{ROOT / 'client' / 'c'}"]
     for extra in (["-fsanitize=address,undefined", "-fno-sanitize-recover=all"], []):
-        done = subprocess.run(common + extra + ["-o", str(target)] + sources, capture_output=True, text=True)
+        done = subprocess.run(  # nosec B603: this computer's compiler by the full path which() found, no shell, on the devkit's own sources
+            common + extra + ["-o", str(target)] + sources, capture_output=True, text=True)
         if done.returncode == 0:
             return target
     raise AssertionError("the client does not compile:\n" + done.stderr)
@@ -163,7 +164,8 @@ def compile_munc(directory: Path) -> Path:
 def munc(program: Path, arguments, environment=None, stdin: bytes = b"", timeout: float = 20.0) -> dict:
     """Run munc and return its "name=value" lines as a dictionary."""
     env = {"PATH": os.environ.get("PATH", ""), **(environment or {})}
-    done = subprocess.run([str(program), *arguments], input=stdin, capture_output=True, env=env, timeout=timeout)
+    done = subprocess.run(  # nosec B603: the program the tests just compiled, with a test's own arguments and no shell
+        [str(program), *arguments], input=stdin, capture_output=True, env=env, timeout=timeout)
     if done.returncode not in (0, 2) or done.stderr:
         raise AssertionError(f"munc {arguments} ended with {done.returncode}:\n{done.stderr.decode('utf-8', 'replace')}")
     fields = {}

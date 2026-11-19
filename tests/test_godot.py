@@ -15,7 +15,7 @@ Skipped, with the reason, without the environment or the engine
 
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404: runs mdk as a developer would
 import sys
 import tempfile
 import unittest
@@ -72,7 +72,8 @@ class GodotProbe(unittest.TestCase):
     def session(self, script, *options):
         command = [sys.executable, str(ROOT / "mdk"), "sim", "--project", str(self.project), "--container", "--json",
                    "--timeout", "240", "--env", f"MUN_HELLO_SCRIPT={script}", *options]
-        done = subprocess.run(command, capture_output=True, text=True, timeout=900)
+        done = subprocess.run(  # nosec B603: this Python and this repository's mdk, no shell, with arguments the test wrote
+            command, capture_output=True, text=True, timeout=900)
         # The engine prints to standard output, before the record.
         start = done.stdout.rfind("\n{\n")
         try:

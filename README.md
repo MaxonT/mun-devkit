@@ -67,6 +67,13 @@ requires each result. `make sample` at the top builds and packs the sample
 itself; `make check` runs the tests this computer can run and names the ones
 it skipped, and `make check-full` fails on any it cannot run.
 
+`make dev-tools` installs the two Python analysers at pinned versions and
+hashes (`tools/dev-requirements.txt`) into `.local/venv`, and `make analyse`
+runs them. A warning is fixed, or, when it is not a defect, marked on its own
+line with the rule and the reason (`# nosec B603: ...`); never for a file or
+a rule as a whole. The C sources are compiled with the compiler's analyser
+in the build environment and give no warning.
+
 To see the card in MUN OS's virtual console, from the MUN OS checkout
 (`.local/mun-os` after `mdk os fetch`): `./mun get`, `./mun dev run
 --window`, then `./mun dev vm dev card-attach NAME` with the image copied to

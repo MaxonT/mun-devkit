@@ -7,7 +7,7 @@ same image. Skipped, with the reason, without the sample's build or e2fsprogs.""
 
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404: runs mdk and MUN OS's card tool
 import sys
 import unittest
 
@@ -39,7 +39,8 @@ class Pack(Scratch):
         return target
 
     def mdk(self, *arguments):
-        return subprocess.run([sys.executable, str(ROOT / "mdk"), *arguments], capture_output=True, text=True)
+        return subprocess.run(  # nosec B603: this Python and this repository's mdk, no shell, with arguments the test wrote
+            [sys.executable, str(ROOT / "mdk"), *arguments], capture_output=True, text=True)
 
     def test_the_card_is_valid_holds_the_build_and_is_reproducible(self):
         target = self.project_copy()
@@ -58,7 +59,8 @@ class Pack(Scratch):
 
         # What the card tool itself reads back from the image, file by file.
         tool = osrepo.card_tool(MUN_OS)
-        listed = subprocess.run(tool + ["hash", str(image), "--files"], capture_output=True, text=True)
+        listed = subprocess.run(  # nosec B603: this Python and the pinned checkout's card tool, no shell, on an image the test made
+            tool + ["hash", str(image), "--files"], capture_output=True, text=True)
         self.assertEqual(listed.returncode, 0, listed.stderr)
         files = {line.split("  ", 1)[1]: line.split("  ", 1)[0] for line in listed.stdout.splitlines()}
         self.assertEqual(files["content/hello-mun"], record["entry_sha256"])

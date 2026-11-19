@@ -20,7 +20,7 @@ The same arrangement as MUN OS's tests/test_hook_safety.py.
 
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404: runs Git, and the tests, under a hostile configuration made here
 import sys
 import tempfile
 import unittest
@@ -39,13 +39,15 @@ def clean_environment():
 
 
 def git(repository, environment, *arguments):
-    return subprocess.run(["git", "-C", str(repository), *arguments], check=True, capture_output=True, text=True,
-                          env=environment).stdout
+    return subprocess.run(  # nosec B603, B607: no shell, a test's own arguments; which git PATH finds is what is under test
+        ["git", "-C", str(repository), *arguments], check=True, capture_output=True, text=True,
+        env=environment).stdout
 
 
 def run_the_tests(environment):
-    return subprocess.run([sys.executable, "-m", "unittest", *USING_GIT], cwd=TESTS, env=environment,
-                          capture_output=True, text=True)
+    return subprocess.run(  # nosec B603: this Python on this repository's tests, no shell
+        [sys.executable, "-m", "unittest", *USING_GIT], cwd=TESTS, env=environment,
+        capture_output=True, text=True)
 
 
 @unittest.skipUnless(GIT, "needs git")

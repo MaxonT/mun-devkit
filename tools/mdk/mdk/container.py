@@ -11,7 +11,7 @@ the host cannot run."""
 import hashlib
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404: starts the container runtime; each call is reviewed on its line
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -38,7 +38,8 @@ def docker() -> str:
 
 
 def image_exists() -> bool:
-    done = subprocess.run([docker(), "image", "inspect", image_tag()], capture_output=True, check=False)
+    done = subprocess.run(  # nosec B603: docker by the full path which() found; a fixed subcommand and the image's own tag
+        [docker(), "image", "inspect", image_tag()], capture_output=True, check=False)
     return done.returncode == 0
 
 
@@ -47,7 +48,9 @@ def build_image() -> None:
     packages of the dated snapshot."""
     command = [docker(), "build", "--platform", PLATFORM, "-t", image_tag(), "-f", str(DOCKERFILE),
                str(DOCKERFILE.parent)]
-    if subprocess.run(command, check=False).returncode != 0:
+    built = subprocess.run(  # nosec B603: docker by its full path, no shell; fixed options and the devkit's own Dockerfile
+        command, check=False)
+    if built.returncode != 0:
         raise MdkError("E-ENV-BUILD", "The SDK environment could not be built.",
                        "See the output above. It needs the network for the pinned base image and Debian snapshot.")
 
@@ -78,10 +81,11 @@ def run(argv: List[str], project_dir: Path, mun_os: Path, env: Optional[Dict[str
         command += ["-e", f"{name}={value}"]
     command += [image_tag(), *argv]
     if not tee:
-        return subprocess.run(command, check=False, capture_output=capture, text=capture)
+        return subprocess.run(  # nosec B603: docker by its full path, no shell; inside runs the developer's own build or game: the purpose
+            command, check=False, capture_output=capture, text=capture)
     lines: List[str] = []
-    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                          errors="replace") as process:
+    with subprocess.Popen(  # nosec B603: the same command as above, its output read as it comes
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace") as process:
         for line in process.stdout or ():
             sys.stdout.write(line)
             sys.stdout.flush()
@@ -91,8 +95,9 @@ def run(argv: List[str], project_dir: Path, mun_os: Path, env: Optional[Dict[str
 
 def describe() -> Dict[str, str]:
     """What the environment holds: its own record of compiler and library versions."""
-    done = subprocess.run([docker(), "run", "--rm", "--platform", PLATFORM, "--network", "none", image_tag(),
-                           "cat", "/etc/mun-devkit-env"], capture_output=True, text=True, check=False)
+    done = subprocess.run(  # nosec B603: docker by its full path, no shell; fixed arguments that print one file of the image
+        [docker(), "run", "--rm", "--platform", PLATFORM, "--network", "none", image_tag(),
+         "cat", "/etc/mun-devkit-env"], capture_output=True, text=True, check=False)
     record = {"image": image_tag()}
     for line in done.stdout.splitlines():
         name, _, value = line.partition("=")
