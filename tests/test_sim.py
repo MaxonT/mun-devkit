@@ -171,7 +171,7 @@ class SaveRequests(Scratch):
 
 class Faults(Scratch):
     def test_every_fault_is_answered_with_its_code_and_the_console_s_sentence(self):
-        for code, sentence in sim.FAULTS.items():
+        for code, sentence in sim.ANSWERED_FAULTS.items():
             with self.subTest(code=code):
                 card = sim.SimCard(self.scratch / f"card-{code}", "mun.test", "1.0.0", SAVES)
                 gate = sim.SaveGate(self.scratch / f"{code}.sock", card, "stest", fail={code: -1})
@@ -190,6 +190,23 @@ class Faults(Scratch):
         self.assertEqual(ask(gate.path, save_line({"n": 2}))["error"]["code"], "no_space")
         self.assertEqual((card.directory / "save.json").read_bytes(), before)
         self.assertTrue(ask(gate.path, save_line({"n": 3}))["ok"])          # ":1" failed one save only
+
+    def test_a_save_the_console_could_not_attend_leaves_the_next_one_free(self):
+        card = self.card()
+        gate = self.gate(card, fail={"save_failed": 1})
+        answer = ask(gate.path, save_line({"n": 1}))
+        self.assertEqual((answer["ok"], answer["error"]["code"]), (False, "save_failed"))
+        self.assertFalse((card.directory / "save.json").exists())      # nothing was written
+        self.assertTrue(ask(gate.path, save_line({"n": 2}))["ok"])     # and the session is not left busy
+        self.assertEqual(gate.saves, [{"ok": False, "code": "save_failed"},
+                                      {"ok": True, "bytes": (card.directory / "save.json").stat().st_size}])
+
+    def test_a_connection_the_console_closes_without_an_answer(self):
+        card = self.card()
+        gate = self.gate(card, fail={"closed": 1})
+        self.assertEqual(ask(gate.path, save_line({"n": 1}), timeout=5.0), "")   # closed, nothing received
+        self.assertFalse((card.directory / "save.json").exists())
+        self.assertTrue(ask(gate.path, save_line({"n": 2}))["ok"])
 
     def test_parse_fail(self):
         self.assertEqual(sim.parse_fail(["no_space", "card_removed:2"]), {"no_space": -1, "card_removed": 2})

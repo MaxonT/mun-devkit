@@ -118,6 +118,8 @@ console's does, with its codes and sentences.
 
 ```sh
 mdk sim --container --fail no_space      # every save is refused as a full card
+mdk sim --container --fail save_failed:1 # the next save is not attended; the one after is
+mdk sim --container --fail closed:1      # the console closes the next save's connection unanswered
 mdk sim --container --stop-after 5       # SIGTERM after 5 s, SIGKILL 3 s later
 mdk sim --container --save-delay 2       # a slow card
 mdk sim --fresh                          # start from a card with no save
@@ -151,6 +153,19 @@ if (mun_save_write(session, 1, "{\"level\":3}", 11, 25000, &result) == MUN_OK)
 else
     show_not_saved(result.code);        /* "no_space", "card_removed", ... */
 ```
+
+What a refusal means for the game:
+
+| `result.code` | What happened | What to do |
+| --- | --- | --- |
+| `no_space`, `card_removed`, `card_mismatch`, `card_unavailable`, `save_path_unsafe`, `write_failed`, `sync_failed`, `reader_unavailable` | The card, or the reader, could not take the save. The save it held before is intact | Tell the player; the next attempt needs the card's situation to change |
+| `save_failed`, `save_busy` | The console could not attend this request (it was busy with another save, or could not pass this one on). Nothing was written | Passing: say "not saved" and offer the save again at the game's next save point. Do not retry in a loop |
+| `save_too_large`, `save_invalid` | The request itself | A fault in the game: fix the payload |
+
+A connection the console closes without answering is `MUN_IO`, and no
+answer in time is `MUN_TIMEOUT`: both end the call, never a wait without
+end, and both leave the outcome unknown until the next start reads the save
+back.
 
 `mun_save_write` blocks until the console answers: call it off the thread
 that draws. `client/c/mun.h` documents every function, status and rule.

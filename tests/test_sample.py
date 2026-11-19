@@ -99,6 +99,21 @@ class Sample(unittest.TestCase):
         self.assertIn("saves confirmed 1", log)                  # the count of confirmed saves did not move
         self.assertEqual(hashlib.sha256((SAVE / "save.json").read_bytes()).hexdigest(), before)
 
+    def test_a_save_the_console_could_not_attend_then_one_it_did(self):
+        record, log = self.session("up save wait up save wait quit", "--fail", "save_failed:1")
+        self.assertEqual(record["result"], "exited")
+        self.assertEqual([save.get("code", "ok") for save in record["saves"]], ["save_failed", "ok"])
+        self.assertIn("save not confirmed: refused (save_failed)", log)
+        self.assertIn("save confirmed", log)
+        self.assertEqual(json.loads((SAVE / "save.json").read_text())["payload"], {"count": 2, "saves": 1})
+
+    def test_a_console_that_closes_without_answering_does_not_hang_the_game(self):
+        record, log = self.session("up save wait up save wait quit", "--fail", "closed:1")
+        self.assertEqual(record["result"], "exited")
+        self.assertEqual([save.get("code", "ok") for save in record["saves"]], ["closed", "ok"])
+        self.assertIn("save not confirmed: io", log)
+        self.assertEqual(json.loads((SAVE / "save.json").read_text())["payload"], {"count": 2, "saves": 1})
+
     def test_a_failed_and_a_crashed_game_are_told_apart(self):
         record, _ = self.session("up fail")
         self.assertEqual((record["result"], record["exit_code"]), ("failed", 3))

@@ -100,6 +100,20 @@ class GodotProbe(unittest.TestCase):
         self.assertIn("save not confirmed: refused (no_space) No hay espacio en la Game Card", log)
         self.assertFalse((self.save / "save.json").exists())
 
+    def test_a_save_the_console_could_not_attend_then_one_it_did(self):
+        record, log = self.session("up save wait up save wait quit", "--fail", "save_failed:1")
+        self.assertEqual(record["result"], "exited")
+        self.assertEqual([save.get("code", "ok") for save in record["saves"]], ["save_failed", "ok"])
+        self.assertIn("save not confirmed: refused (save_failed)", log)
+        self.assertEqual(json.loads((self.save / "save.json").read_text())["payload"], {"count": 2, "saves": 1})
+
+    def test_a_console_that_closes_without_answering_does_not_hang_the_game(self):
+        record, log = self.session("up save wait up save wait quit", "--fail", "closed:1")
+        self.assertEqual(record["result"], "exited")
+        self.assertEqual([save.get("code", "ok") for save in record["saves"]], ["closed", "ok"])
+        self.assertIn("save not confirmed: io", log)
+        self.assertEqual(json.loads((self.save / "save.json").read_text())["payload"], {"count": 2, "saves": 1})
+
     def test_a_slow_card_does_not_stop_frames_and_a_second_save_waits(self):
         record, log = self.session("up save up save up wait quit", "--save-delay", "0.5")
         self.assertEqual(record["result"], "exited")

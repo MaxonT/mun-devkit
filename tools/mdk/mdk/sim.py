@@ -26,9 +26,10 @@ limits), the display, sound and input devices, the real card and its
 failures, the shell. A game that passes here follows the contracts; whether
 it runs on a console is established on a console.
 
-Faults are injected by name (`fail`): the simulated card then answers a save
-with that code, as the console would word it. `no_space` here is an injected
-answer, not a full file system."""
+Faults are injected by name (`fail`): the simulated console then answers a
+save with that code, as the console would word it, or, for `closed`, closes
+the connection without an answer. `no_space` here is an injected answer, not
+a full file system."""
 
 import errno
 import json
@@ -74,7 +75,11 @@ CARD_FAULTS = {
 LAUNCHER_FAULTS = {"reader_unavailable": "El lector de tarjetas no está disponible",
                    "save_failed": "El lanzador no pudo atender el guardado"}
 TOO_LARGE = "La partida supera el tamaño permitido"
-FAULTS = {**CARD_FAULTS, **LAUNCHER_FAULTS}
+# Not a code: the console closes the connection without an answer, as it does
+# when the session ends while a save is being asked.
+CLOSED = "closed"
+ANSWERED_FAULTS = {**CARD_FAULTS, **LAUNCHER_FAULTS}       # code -> the console's sentence
+FAULTS = {**ANSWERED_FAULTS, CLOSED: "(the connection is closed without an answer)"}
 
 
 class SimCard:
@@ -300,6 +305,13 @@ class SaveGate:
             reply({"type": "saved", "ok": False, "error": {"code": code, "message": text}})
         if not self.running:
             return refuse("no_session", "No hay una sesión de juego en curso")
+        if self._take_fault((CLOSED,)):
+            self.saves.append({"ok": False, "code": CLOSED})
+            return reply(None)
+        # `save_failed` is the launcher's own: it could not attend the save, or
+        # (MUN OS after v0.1.0-dev.5) could not hand it to the card service.
+        # Nothing was written and the session is not left busy: the next save
+        # is attended.
         fault = self._take_fault(LAUNCHER_FAULTS)
         if fault:
             return refuse(fault, LAUNCHER_FAULTS[fault])
@@ -362,7 +374,9 @@ class SaveGate:
                 pass
             connection.close()
 
-        def send(connection: socket.socket, message: dict) -> None:
+        def send(connection: socket.socket, message: Optional[dict]) -> None:
+            if message is None:             # closed without an answer
+                return drop(connection)
             try:
                 connection.setblocking(True)
                 connection.settimeout(2.0)

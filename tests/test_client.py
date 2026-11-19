@@ -69,7 +69,7 @@ class Client(Scratch):
         self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"a": 1, "b": [1, 2]})
 
     def test_refusals_carry_the_console_s_code_and_sentence(self):
-        for code, sentence in sim.FAULTS.items():
+        for code, sentence in sim.ANSWERED_FAULTS.items():
             with self.subTest(code=code):
                 card = sim.SimCard(self.scratch / f"card-{code}", "mun.test", "1.0.0", self.card().rules)
                 gate = sim.SaveGate(self.scratch / f"{code}.sock", card, "stest", fail={code: -1})
@@ -77,6 +77,25 @@ class Client(Scratch):
                 got = self.run_munc(["write", "1", "5000"], b'{"n":1}', save_socket=gate.path)
                 self.assertEqual((got["status"], got["code"], got["message"], got["bytes"]),
                                  ("refused", code, sentence, "0"))
+
+    def test_a_save_the_console_could_not_attend_is_refused_and_the_next_one_works(self):
+        card = self.card()
+        gate = self.gate(card, fail={"save_failed": 1})
+        first = self.run_munc(["write", "1", "5000"], b'{"n":1}', save_socket=gate.path)
+        self.assertEqual((first["status"], first["code"], first["message"], first["bytes"]),
+                         ("refused", "save_failed", sim.ANSWERED_FAULTS["save_failed"], "0"))
+        self.assertFalse((card.directory / "save.json").exists())
+        second = self.run_munc(["write", "1", "5000"], b'{"n":2}', save_socket=gate.path)
+        self.assertEqual(second["status"], "ok")
+        self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"n": 2})
+
+    def test_a_connection_closed_without_an_answer_is_an_error_not_a_wait(self):
+        # The client was given ten minutes; the call ends as soon as the
+        # console closes, with an error. (munc itself is killed after 20 s.)
+        gate = self.gate(fail={"closed": 1})
+        got = self.run_munc(["write", "1", "600000"], b'{"n":1}', save_socket=gate.path)
+        self.assertEqual((got["status"], got["code"], got["bytes"]), ("io", "", "0"))
+        self.assertEqual(self.run_munc(["write", "1", "5000"], b'{"n":2}', save_socket=gate.path)["status"], "ok")
 
     def test_the_console_can_refuse_what_the_client_let_through(self):
         # Valid JSON, and text no card can hold: half of a surrogate pair.

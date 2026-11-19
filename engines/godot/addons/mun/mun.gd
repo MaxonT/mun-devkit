@@ -118,7 +118,9 @@ func save_load() -> Dictionary:
 ## "save_busy", ...) and `message` (its sentence). After TIMEOUT or IO the
 ## outcome is unknown until the next start reads the save back. One save at
 ## a time per session: a second request while one is in flight is refused by
-## the console with "save_busy".
+## the console with "save_busy". "save_failed" and "save_busy" are passing:
+## the console could not attend this request and nothing was written. Do not
+## retry in a loop; offer the save again at the game's next save point.
 func save_write(data: Dictionary, schema: int, timeout_ms: int = 25000) -> Dictionary:
 	if schema < 1:
 		return {"status": Status.ARGUMENT}

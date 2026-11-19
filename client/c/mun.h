@@ -148,7 +148,12 @@ mun_status mun_save_load(mun_session *session, char *payload, size_t capacity, s
  *
  *   MUN_OK           the card holds the save; result->bytes is set.
  *   MUN_REFUSED      the console said no; result->code says why. The save
- *                    the card held before is intact.
+ *                    the card held before is intact. Most codes say
+ *                    something about the card ("no_space", "card_removed").
+ *                    "save_failed" and "save_busy" are passing: the console
+ *                    could not attend this request and nothing was written.
+ *                    Do not retry in a loop; offer the save again at the
+ *                    game's next save point.
  *   MUN_UNAVAILABLE  no save socket: the game can play but not save.
  *   MUN_TIMEOUT      no answer within timeout_ms (the console itself allows
  *                    a card 20 s). The outcome is unknown until the next
