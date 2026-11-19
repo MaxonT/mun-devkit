@@ -68,9 +68,11 @@ def fetch(source: Optional[str] = None) -> Path:
 
     if not (FETCHED / ".git").exists():
         FETCHED.parent.mkdir(parents=True, exist_ok=True)
-        run("clone", "--quiet", "--no-checkout", origin, str(FETCHED))
+        # After `--` the source is a repository's name whatever it looks
+        # like: one that starts with '-' is not read as an option of Git's.
+        run("clone", "--quiet", "--no-checkout", "--", origin, str(FETCHED))
     elif _git(FETCHED, "cat-file", "-e", pinned["commit"] + "^{commit}") is None:
-        run("fetch", "--quiet", "--tags", origin, cwd=FETCHED)
+        run("fetch", "--quiet", "--tags", "--", origin, cwd=FETCHED)
     run("-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", pinned["commit"], cwd=FETCHED)
     found = identity(FETCHED)
     if found["pin"] != "match":
