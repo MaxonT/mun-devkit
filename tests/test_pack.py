@@ -70,6 +70,15 @@ class Pack(Scratch):
         self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
         self.assertEqual(checks.sha256_file(image), record["image_sha256"])
 
+    def test_a_title_that_starts_with_a_dash_is_a_title(self):
+        # The card tool has an option of that name: the title goes to it as a value.
+        target = self.project_copy()
+        description = target / "mun-project.toml"
+        description.write_text(description.read_text().replace('title = "MUN Hello"', 'title = "--version"'))
+        done = self.mdk("pack", "--project", str(target))
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(json.loads((target / "build" / "hello-mun.card.json").read_text())["card"]["title"], "--version")
+
     def test_a_build_that_fails_the_checks_is_not_packed(self):
         target = self.project_copy()
         (target / "build" / "hello-mun").write_bytes(b"#!/bin/sh\n")

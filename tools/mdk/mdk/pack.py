@@ -28,8 +28,8 @@ def pack(project: Project, mun_os: Path) -> Dict[str, Any]:
     tool = osrepo.card_tool(mun_os)
     card = project.card
     command = tool + ["create", str(project.image), "--variant", project.profile["card_variant"],
-                      "--game", str(project.entry), "--title", card["title"], "--id", card["id"],
-                      "--version", card["version"], "--force"]
+                      "--game", str(project.entry), f"--title={card['title']}", f"--id={card['id']}",
+                      f"--version={card['version']}", "--force"]       # =VALUE: a title may start with '-'
     if project.content is not None:
         command += ["--content", str(project.content)]
     if isinstance(card.get("size_mib"), int):
@@ -37,7 +37,7 @@ def pack(project: Project, mun_os: Path) -> Dict[str, Any]:
     for option in ("cover", "accent", "background"):
         if card.get(option):
             value = str(project.path(card[option])) if option == "cover" else card[option]
-            command += [f"--{option}", value]
+            command.append(f"--{option}={value}")
     created = subprocess.run(command, capture_output=True, text=True, check=False)
     print(created.stdout, end="")
     if created.returncode != 0:
