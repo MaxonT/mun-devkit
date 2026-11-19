@@ -18,6 +18,8 @@ subset MUN OS reads a card's manifest with.
     run = "make"                   # run in the project directory, inside the SDK environment
     entry = "build/hello-mun"      # the executable the build leaves
     content = "build/content"      # optional: the data the game reads, mounted read-only
+    hardening = "required"         # optional: "required" makes a missing hardening property
+                                   # an error; "report" (the default) only says so
 """
 
 import json
@@ -29,7 +31,7 @@ from .errors import MdkError
 
 FILE_NAME = "mun-project.toml"
 TABLES = {"project": {"name"}, "card": {"id", "title", "version", "profile", "size_mib", "cover", "accent", "background"},
-          "build": {"run", "entry", "content"}}
+          "build": {"run", "entry", "content", "hardening"}}
 REQUIRED = {"project": ("name",), "card": ("id", "title", "version", "profile"), "build": ("run", "entry")}
 
 
@@ -96,6 +98,8 @@ def load(directory: Path, mun_os: Path) -> Project:
         missing = [key for key in keys if not isinstance(data.get(table, {}).get(key), str) or not data[table][key]]
         if missing:
             raise MdkError("E-PROJECT", f"{FILE_NAME}: [{table}] needs {', '.join(missing)}.")
+    if data["build"].get("hardening", "report") not in ("required", "report"):
+        raise MdkError("E-PROJECT", f'{FILE_NAME}: build.hardening is "required" or "report".')
     name = data["project"]["name"]
     if not name.replace("-", "").replace("_", "").isalnum():
         raise MdkError("E-PROJECT", f"{FILE_NAME}: project.name must be letters, digits, '-' or '_'.")

@@ -12,6 +12,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -58,10 +59,13 @@ def require_image() -> None:
 
 
 def run(argv: List[str], project_dir: Path, mun_os: Path, env: Optional[Dict[str, str]] = None,
-        capture: bool = False) -> subprocess.CompletedProcess:
+        capture: bool = False, tee: bool = False) -> subprocess.CompletedProcess:
     """Run `argv` in the environment with the project at /work (writable),
     the devkit at /opt/mun-devkit and the card package at /opt/mun-os (both
-    read-only), without network, as the calling user."""
+    read-only), without network, as the calling user.
+
+    With `tee`, what it prints (both streams, as one) is shown as it comes
+    and also returned in `stdout`."""
     require_image()
     command = [docker(), "run", "--rm", "--init", "--platform", PLATFORM, "--network", "none",
                "--user", f"{os.getuid()}:{os.getgid()}",
@@ -73,7 +77,16 @@ def run(argv: List[str], project_dir: Path, mun_os: Path, env: Optional[Dict[str
     for name, value in (env or {}).items():
         command += ["-e", f"{name}={value}"]
     command += [image_tag(), *argv]
-    return subprocess.run(command, check=False, capture_output=capture, text=capture)
+    if not tee:
+        return subprocess.run(command, check=False, capture_output=capture, text=capture)
+    lines: List[str] = []
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          errors="replace") as process:
+        for line in process.stdout or ():
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            lines.append(line)
+    return subprocess.CompletedProcess(command, process.returncode, "".join(lines), "")
 
 
 def describe() -> Dict[str, str]:

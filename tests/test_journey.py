@@ -21,7 +21,7 @@ from pathlib import Path
 
 from support import MUN_OS, ROOT, isolate_git, needs
 
-from mdk import container, osrepo
+from mdk import checks, container, elf, osrepo
 from mdk.errors import MdkError
 
 
@@ -63,12 +63,27 @@ class Journey(unittest.TestCase):
         self.assertEqual(lock["profile"], "linux-arm64-gl-v0")
 
         self.step("build")
-        self.assertIn("check: passed", self.step("check"))
+        checked = self.step("check")
+        self.assertIn("check: passed", checked)
+        self.assertNotIn("warning", checked)
+        # A started project compiles its own program: it requires the
+        # devkit's hardening, and its build carried every option.
+        self.assertIn('hardening = "required"', (self.project / "mun-project.toml").read_text())
+        self.assertEqual([label for label, ok, _ in checks.hardening(elf.read(self.project / "build" / "star-well"))
+                          if ok is not True], [])
+        commands = json.loads((self.project / "build" / checks.COMMANDS_FILE).read_text())["commands"]
+        self.assertTrue(commands)
+        self.assertEqual(checks.check_build_commands(commands), [])
+        for flag in ("-fstack-protector-strong", "-fstack-clash-protection", "-D_FORTIFY_SOURCE=3",
+                     "-mbranch-protection=standard", "-Wl,-z,relro", "-Wl,-z,now", "-Wl,-z,noexecstack"):
+            self.assertIn(flag, commands[0])
         packed = self.step("pack")
         self.assertIn("Star Well (org.example.star-well) v0.1.0, linux-arm64-gl-v0, entry content/star-well", packed)
         record = json.loads((self.project / "build" / "star-well.card.json").read_text())
         self.assertEqual(record["card"]["id"], "org.example.star-well")
-        self.assertEqual(record["entry_needs"], ["libSDL2-2.0.so.0", "libopenal.so.1", "libm.so.6", "libc.so.6"])
+        # The loader is named too: on AArch64 the stack protector's canary lives in it.
+        self.assertEqual(record["entry_needs"], ["libSDL2-2.0.so.0", "libopenal.so.1", "libm.so.6", "libc.so.6",
+                                                 "ld-linux-aarch64.so.1"])
 
         first = self.step("sim", "--container", "--fresh", "--timeout", "30", "--env", "MUN_HELLO_HEADLESS=1",
                           "--env", "MUN_HELLO_SCRIPT=up up up save wait quit")

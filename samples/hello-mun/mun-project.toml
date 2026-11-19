@@ -19,3 +19,7 @@ background = "#16202B"
 run = "make"
 entry = "build/hello-mun"
 content = "build/content"
+# This program is compiled here, with the devkit's options: a missing
+# hardening property is an error. A project whose entry is an engine's own
+# program says "report" (the default) and is told, not stopped.
+hardening = "required"

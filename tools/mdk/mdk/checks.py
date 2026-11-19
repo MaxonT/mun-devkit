@@ -9,6 +9,9 @@ things worth a look. None of this replaces the console: the card tool
 validates the card, and a console runs the game."""
 
 import hashlib
+import json
+import re
+import shlex
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -89,6 +92,110 @@ def check_entry(path: Path, profile: Dict[str, Any]) -> Tuple[List[MdkError], Li
     return errors, warnings, facts
 
 
+def hardening(info: Dict[str, Any]) -> List[Tuple[str, Any, str]]:
+    """What a program's hardening can be read from the file itself:
+    (property, True / False / None when the file cannot say, detail).
+
+    A statically linked program imports nothing, so its stack protector and
+    fortified calls cannot be seen; and nothing in a program shows whether it
+    was built with stack-clash protection: that is in the build's commands."""
+    fortified = [name for name in info.get("imports", [])
+                 if name.startswith("__") and name.endswith("_chk")]
+    seen = None if info.get("static") else True
+    marks = info.get("branch_protection", [])
+    return [
+        ("position-independent executable", bool(info.get("pie")), ""),
+        ("full RELRO (GNU_RELRO, BIND_NOW)", bool(info.get("relro") and info.get("bind_now")), ""),
+        ("non-executable stack", info.get("nx_stack") if info.get("nx_stack") is not None else False, ""),
+        ("stack protector (__stack_chk_fail)", seen and "__stack_chk_fail" in info.get("imports", []), ""),
+        ("fortified calls", seen and bool(fortified), ", ".join(fortified[:4])),
+        ("branch protection (BTI and PAC)", {"BTI", "PAC"} <= set(marks) if info.get("machine") == "aarch64" else None,
+         "note: " + (" ".join(marks) or "none")),
+    ]
+
+
+def check_hardening(name: str, info: Dict[str, Any], required: bool) -> List[MdkError]:
+    """Findings for the properties the program lacks: errors when the project
+    requires them (what the devkit itself compiles), one warning otherwise.
+    An engine's or a library's objects are not the developer's to rebuild:
+    for them mdk says what it sees and goes on."""
+    missing = [label for label, ok, _ in hardening(info) if ok is False]
+    if not missing:
+        return []
+    remedy = "Build with the devkit's options (`include $(MUN_DEVKIT)/mk/hardening.mk`)."
+    marking = (" The linker marks a program for BTI and PAC only when every object in it is marked: an "
+               "engine's or a library's own objects may not be yours to change.")
+    if required:
+        return [MdkError("E-HARDEN", f"{name} lacks: {label}.", remedy + (marking if "BTI" in label else ""))
+                for label in missing]
+    return [MdkError("W-HARDEN", f"{name} lacks: {'; '.join(missing)}.",
+                     remedy + (marking if any("BTI" in label for label in missing) else "")
+                     + "\nReported, not required: set build.hardening = \"required\" in "
+                     "mun-project.toml for a program you compile yourself.")]
+
+
+COMMANDS_FILE = "compile-commands.json"
+COMPILER = re.compile(r"(?:[\w.+]+-)*(?:cc|gcc|g\+\+|c\+\+|clang|clang\+\+)(?:-[\d.]+)?")
+SOURCES = (".c", ".cc", ".cpp", ".cxx", ".C", ".m", ".mm")
+COMPILE_FLAGS = ("-fstack-protector-strong", "-fstack-clash-protection")
+LINK_FLAGS = ("-Wl,-z,relro", "-Wl,-z,now", "-Wl,-z,noexecstack")
+
+
+def compiler_commands(log: str) -> List[List[str]]:
+    """The compiler's commands in a build's output, as arguments: the lines
+    a build tool echoes before running them (make does; a tool that prints
+    none leaves nothing to read). A line may hold several commands
+    (`mkdir -p build && cc ...`)."""
+    found = []
+    for line in log.splitlines():
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        try:
+            tokens = list(lexer)
+        except ValueError:                # not a command line: an unmatched quote
+            continue
+        words: List[str] = []
+        for token in tokens + [";"]:
+            if token and not set(token) - set("();<>|&"):          # an operator: the command ends here
+                if words and COMPILER.fullmatch(Path(words[0]).name) and not {"-E", "-M", "-MM"} & set(words):
+                    found.append(words)
+                words = []
+            else:
+                words.append(token)
+    return found
+
+
+def check_build_commands(commands: List[List[str]], machine: str = "aarch64") -> List[MdkError]:
+    """What a program does not show: that every object was compiled with the
+    stack protector (the program shows only that some function has one),
+    with stack-clash protection (no mark at all) and fortified (only the
+    calls that could be show); and that it was linked with the three -z
+    options. One finding per command that lacks an option."""
+    findings = []
+    for words in commands:
+        compiles = any(word.endswith(SOURCES) for word in words if not word.startswith("-"))
+        links = not {"-c", "-S"} & set(words)
+        wanted: List[str] = []
+        if compiles:
+            wanted += COMPILE_FLAGS
+            levels = [word for word in words if re.fullmatch(r"-O\w*", word)]
+            if levels and levels[-1] != "-O0":           # the C library refuses to fortify an unoptimised build
+                wanted.append("-D_FORTIFY_SOURCE=3")
+            if machine == "aarch64":
+                wanted.append("-mbranch-protection=standard")
+        if links:
+            wanted += LINK_FLAGS
+        lacking = [flag for flag in wanted if flag not in words]
+        if lacking:
+            inputs = [word for word in words if not word.startswith("-") and word.endswith(SOURCES + (".o",))]
+            findings.append(MdkError(
+                "E-HARDEN-BUILD", f"A build command lacks {' '.join(lacking)}.",
+                "Give every compile and link command the devkit's options: $(MUN_HARDEN_CFLAGS) and "
+                "$(MUN_HARDEN_LDFLAGS) from mk/hardening.mk.",
+                " ".join(inputs[:6]) or " ".join(words[:6])))
+    return findings
+
+
 def check_content(directory: Path, entry_name: str) -> Tuple[List[MdkError], List[MdkError], Dict[str, Any]]:
     """The data tree that will be the card's content."""
     errors: List[MdkError] = []
@@ -141,6 +248,22 @@ def check_project(project: Project, mun_os: Path) -> Dict[str, Any]:
     entry_errors, entry_warnings, entry = check_entry(project.entry, project.profile)
     errors += entry_errors
     warnings += entry_warnings
+    if entry and not entry_errors:
+        required = project.build.get("hardening") == "required"
+        (errors if required else warnings).extend(check_hardening(project.entry.name, entry, required))
+        if required:
+            try:
+                record = json.loads((project.output / COMMANDS_FILE).read_text(encoding="utf-8"))
+                commands = [words for words in record["commands"] if isinstance(words, list)]
+            except (OSError, ValueError, KeyError, TypeError):
+                commands = []
+            if commands:
+                errors += check_build_commands(commands, entry.get("machine", ""))
+            else:
+                warnings.append(MdkError(
+                    "W-HARDEN-BUILD", "The build's compile commands were not seen.",
+                    "Stack-clash protection leaves no mark in a program: mdk reads it from the commands "
+                    "`mdk build` saw the build print. Build with `mdk build`, with a tool that prints them."))
     content: Dict[str, Any] = {}
     if project.content is not None:
         if project.profile["card_variant"] != "game-gl":
@@ -169,6 +292,11 @@ def render(report: Dict[str, Any]) -> str:
         lines.append(f"entry    {Path(entry['file']).name}: {entry['size'] / MIB:.2f} MiB, {entry['machine']}, {linkage}"
                      + (f", glibc {entry['glibc']}" if entry.get("glibc") else ""))
         lines.append(f"         sha256 {entry['sha256']}")
+        if entry.get("machine") == "aarch64" and "pie" in entry:
+            words = {True: "yes", False: "NO", None: "cannot tell"}
+            said = [f"{label.split(' (')[0]}: {words[ok]}" for label, ok, _ in hardening(entry)]
+            lines.append("hardening " + "; ".join(said[:3]) + ";")
+            lines.append("          " + "; ".join(said[3:]))
     content = report.get("content") or {}
     if content:
         lines.append(f"content  {content['files']} files, {content['bytes'] / MIB:.2f} MiB")

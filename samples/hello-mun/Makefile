@@ -18,13 +18,18 @@ AL_LIBS    ?= -framework OpenAL
 else
 AL_LIBS    ?= -lopenal
 endif
+# The options a console program is built with, each tried on this compiler
+# first; `mdk check` reads the result from the program (build.hardening in
+# mun-project.toml).
+include $(MUN_DEVKIT)/mk/hardening.mk
 
 all: $(BUILD)/$(NAME) content
 
 # -D_GNU_SOURCE is not needed: the sources use C11, POSIX and the two libraries.
-$(BUILD)/$(NAME): $(SRC) $(HDR)
+# The makefiles are prerequisites: a change of options builds the program again.
+$(BUILD)/$(NAME): $(SRC) $(HDR) Makefile $(MUN_DEVKIT)/mk/hardening.mk
 	mkdir -p $(BUILD)
-	$(CC) $(WARNINGS) $(CFLAGS) -I$(MUN_DEVKIT)/client/c $(SDL_CFLAGS) -o $@ $(SRC) $(SDL_LIBS) $(AL_LIBS) -lm
+	$(CC) $(WARNINGS) $(CFLAGS) $(MUN_HARDEN_CFLAGS) -I$(MUN_DEVKIT)/client/c $(SDL_CFLAGS) -o $@ $(SRC) $(MUN_HARDEN_LDFLAGS) $(SDL_LIBS) $(AL_LIBS) -lm
 
 # The card's content: the configuration and a sound, made by a small script so
 # that no binary file is kept in the repository.

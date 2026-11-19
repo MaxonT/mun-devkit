@@ -98,9 +98,43 @@ E-LIB     game needs libcurl.so.4, which the profile linux-arm64-gl-v0 does not 
 Each finding has a stable code, what is wrong and what to do. The codes:
 `E-ENTRY`, `E-NOT-ELF`, `E-ARCH`, `E-NOT-PROGRAM`, `E-SIZE`, `E-INTERP`,
 `E-LIB`, `E-GLIBC`, `E-CONTENT`, `E-CONTENT-LINK`, `E-CONTENT-ENTRY`,
-`E-CARD-ID`, `E-CARD-VERSION`, `E-CARD-TITLE`, `E-PROFILE`, and the warnings
-`W-RUNPATH`, `W-CODE`, `W-CARD-SIZE`. The card itself is validated by
-MUN OS's tool, whose own codes are in MUN OS's `docs/game-cards.md`.
+`E-CARD-ID`, `E-CARD-VERSION`, `E-CARD-TITLE`, `E-PROFILE`, `E-HARDEN`,
+`E-HARDEN-BUILD`, and the warnings `W-RUNPATH`, `W-CODE`, `W-CARD-SIZE`,
+`W-HARDEN`, `W-HARDEN-BUILD`. The card itself is validated by MUN OS's tool,
+whose own codes are in MUN OS's `docs/game-cards.md`.
+
+### Hardening
+
+The sample, a project started from it and the client are compiled with the
+options in `mk/hardening.mk`: `-fstack-protector-strong`,
+`-fstack-clash-protection`, `-D_FORTIFY_SOURCE=3` (in an optimising build),
+`-mbranch-protection=standard`, `-fPIE -pie` and `-Wl,-z,relro -Wl,-z,now
+-Wl,-z,noexecstack`. Each is tried on the compiler first and left out if it
+is refused, so the same makefile builds on another system.
+
+`mdk check` then reads the result, not the makefile:
+
+```
+hardening position-independent executable: yes; full RELRO: yes; non-executable stack: yes;
+          stack protector: yes; fortified calls: yes; branch protection: yes
+```
+
+Six properties are in the program itself. Stack-clash protection leaves no
+mark there, and a program shows only that *some* function has a canary: for
+those, `mdk build` keeps the compiler commands the build printed
+(`build/compile-commands.json`) and `mdk check` requires every option in
+every one of them.
+
+`build.hardening` in `mun-project.toml` says which case a project is:
+
+| Value | For | A missing property or option |
+| --- | --- | --- |
+| `"required"` | A program you compile yourself. The sample and `mdk new` say this | An error: `E-HARDEN`, `E-HARDEN-BUILD` |
+| `"report"` (the default) | An entry you did not compile: an engine's export template, a program linked with a library built elsewhere | One warning, `W-HARDEN`. The check passes |
+
+The second case exists because of branch protection: the linker marks a
+program for BTI and PAC only when every object in it is marked, and an
+engine's or a library's objects are not the developer's to rebuild.
 
 ### The card
 
@@ -178,6 +212,7 @@ mdk                    the host tool's entry point
 tools/mdk/             its source (Python, standard library only)
 tools/env/             the build environment's definition
 client/c/              mun.h, mun.c and the client's test program
+mk/hardening.mk        the options a console program is compiled with
 contracts/profiles/    what mdk checks a build against, per runtime profile
 samples/hello-mun/     the native sample
 samples/hello-mun-godot/   the same small game as a Godot project

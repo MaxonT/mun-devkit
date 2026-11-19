@@ -103,7 +103,18 @@ def cmd_env(args) -> int:
 
 def cmd_build(args) -> int:
     found, mun_os = _project(args)
-    done = container.run(["sh", "-c", found.build["run"]], found.directory, mun_os)
+    print(found.build["run"], flush=True)
+    done = container.run(["sh", "-c", found.build["run"]], found.directory, mun_os, tee=True)
+    # The build's own commands, kept: some of what a program was built with
+    # (stack-clash protection) leaves no mark in the program itself. A build
+    # that compiled nothing leaves the record of the one that did.
+    log = found.build["run"] + "\n" + done.stdout
+    found.output.mkdir(parents=True, exist_ok=True)
+    (found.output / "build.log").write_text(log, encoding="utf-8")
+    commands = checks.compiler_commands(log)
+    if commands:
+        (found.output / checks.COMMANDS_FILE).write_text(
+            json.dumps({"format": "mdk-compile-commands/1", "commands": commands}, indent=2) + "\n", encoding="utf-8")
     if done.returncode != 0:
         raise MdkError("E-BUILD", f"The build command failed (exit code {done.returncode}).", "Its output is above.")
     if not found.entry.is_file():
