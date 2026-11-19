@@ -20,6 +20,11 @@ sys.path.insert(0, str(ROOT / "tools" / "mdk"))
 import gitenv  # noqa: E402
 from mdk import osrepo, sim  # noqa: E402
 
+# How long a test waits for something that must happen before it gives up
+# and fails. It bounds a failure and never decides a result: no test passes
+# because this much time went by.
+PATIENCE = 60.0
+
 MUN_OS = osrepo.find()
 SAVES = osrepo.mun_card(MUN_OS).saves
 SAMPLE = ROOT / "samples" / "hello-mun"
@@ -77,10 +82,10 @@ class Scratch(unittest.TestCase):
         return gate
 
 
-def ask(path, data: bytes, timeout: float = 3.0, half_close: bool = False):
-    """Send `data` to the socket and return what comes back before `timeout`:
-    the decoded answer line, "" when the peer closed without one, or None
-    when nothing came at all."""
+def ask(path, data: bytes, timeout: float = PATIENCE, half_close: bool = False):
+    """Send `data` to the socket and return what comes back: the decoded
+    answer line, or "" when the peer closed without one. (None if nothing
+    came within `timeout`: a test that expects silence uses attended().)"""
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(timeout)
         connection.connect(str(path))
@@ -102,6 +107,37 @@ def ask(path, data: bytes, timeout: float = 3.0, half_close: bool = False):
         except OSError:
             return ""
         return json.loads(received.split(b"\n", 1)[0])
+
+
+def attended(gate, connection: socket.socket):
+    """What the service has done with what `connection` sent, once it is
+    known to have dealt with it: None when it has not answered and holds the
+    connection open, "" when it closed it, else its decoded answer.
+
+    The service reads its connections in one thread, and a connection made
+    later is read later: when it has answered a request made after this one,
+    it has read this one. The request used is refused as invalid, so it
+    leaves the card as it was and one "save_invalid" in the gate's record."""
+    marker = ask(gate.path, save_line({}, schema=0))
+    if not marker or marker.get("error", {}).get("code") != "save_invalid":
+        raise AssertionError(f"the service did not attend the marker request: {marker!r}")
+    connection.setblocking(False)
+    try:
+        received = connection.recv(65536)
+    except BlockingIOError:
+        return None
+    finally:
+        connection.setblocking(True)
+    return json.loads(received.split(b"\n", 1)[0]) if received.strip() else ""
+
+
+def connect(test: unittest.TestCase, path) -> socket.socket:
+    """A connection to the socket at `path`, closed when the test ends."""
+    connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    test.addCleanup(connection.close)
+    connection.settimeout(PATIENCE)
+    connection.connect(str(path))
+    return connection
 
 
 def save_line(data, schema=1, kind="save") -> bytes:

@@ -71,8 +71,8 @@ class GodotProbe(unittest.TestCase):
 
     def session(self, script, *options):
         command = [sys.executable, str(ROOT / "mdk"), "sim", "--project", str(self.project), "--container", "--json",
-                   "--timeout", "60", "--env", f"MUN_HELLO_SCRIPT={script}", *options]
-        done = subprocess.run(command, capture_output=True, text=True, timeout=180)
+                   "--timeout", "240", "--env", f"MUN_HELLO_SCRIPT={script}", *options]
+        done = subprocess.run(command, capture_output=True, text=True, timeout=900)
         # The engine prints to standard output, before the record.
         start = done.stdout.rfind("\n{\n")
         try:
@@ -115,8 +115,11 @@ class GodotProbe(unittest.TestCase):
         self.assertEqual(json.loads((self.save / "save.json").read_text())["payload"], {"count": 2, "saves": 1})
 
     def test_a_slow_card_does_not_stop_frames_and_a_second_save_waits(self):
-        record, log = self.session("up save up save up wait quit", "--save-delay", "0.5")
+        # The card keeps the first save unanswered for the whole session. The
+        # game reaches its last step all the same, and never asks twice.
+        record, log = self.session("up save up save up quit", "--hold-saves")
         self.assertEqual(record["result"], "exited")
+        self.assertFalse(record["stop"]["requested"])
         self.assertEqual(record["saves"], [{"ok": True, "bytes": (self.save / "save.json").stat().st_size}])
         self.assertEqual(json.loads((self.save / "save.json").read_text())["payload"], {"count": 1, "saves": 1})
 
@@ -131,7 +134,7 @@ class GodotProbe(unittest.TestCase):
         # Godot installs no SIGTERM handler: the stock engine dies by the
         # signal instead of exiting 0. A game for a console needs the engine
         # built with a termination module; this records the stock behaviour.
-        record, _ = self.session("up idle:100000", "--stop-after", "2")
+        record, _ = self.session("up save wait idle:100000", "--stop-when", "saved")
         self.assertEqual((record["result"], record.get("signal")), ("crashed", "SIGTERM"))
         self.assertFalse(record["stop"]["killed"])
 

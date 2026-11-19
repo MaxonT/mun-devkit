@@ -266,19 +266,35 @@ class _LineReader:
 class SaveGate:
     """The session's save socket. One thread accepts connections and reads
     requests; each accepted save is written by a worker, and answered only if
-    the session is still running when the card has answered."""
+    the session is still running when the card has answered.
+
+    A slow card is simulated in two ways. `save_delay` makes each save take
+    that long. `hold` keeps each save in the card until release() or the end
+    of the session: for whoever needs the save to be in flight while
+    something else happens, and to know it (wait_saving()), not to guess it
+    from the time passed. Either way a save the card has taken is written
+    when the session ends, as a console's card service finishes a write
+    that is under way.
+
+    `clock` is the time the service reads to close a connection that asks
+    nothing: monotonic seconds."""
 
     def __init__(self, path: Path, card: SimCard, session: str, fail: Optional[Dict[str, int]] = None,
                  save_delay: float = 0.0, log: Callable[[str], None] = lambda line: None,
-                 request_timeout: float = SAVE_REQUEST_TIMEOUT):
+                 request_timeout: float = SAVE_REQUEST_TIMEOUT, hold: bool = False,
+                 clock: Callable[[], float] = time.monotonic):
         self.path, self.card, self.session, self.log = Path(path), card, session, log
         self.request_timeout = request_timeout
+        self.clock = clock
         self.fail = dict(fail or {})        # code -> how many more saves fail with it (-1: all)
         self.save_delay = save_delay
+        self.hold = hold
         self.running = True                 # the session's state, as the launcher sees it
         self.saving = False
         self.saves: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
+        self._state = threading.Condition(self._lock)      # told when `saving` or `saves` change
+        self._release = threading.Event()
         self._stop = threading.Event()
         self._listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._listener.bind(str(self.path))
@@ -299,14 +315,21 @@ class SaveGate:
                     return code
         return None
 
+    def _record(self, save: Dict[str, Any], saving: Optional[bool] = None) -> None:
+        with self._state:
+            self.saves.append(save)
+            if saving is not None:
+                self.saving = saving
+            self._state.notify_all()
+
     def request(self, message: dict, reply: Callable[[dict], None]) -> None:
         def refuse(code: str, text: str) -> None:
-            self.saves.append({"ok": False, "code": code})
+            self._record({"ok": False, "code": code})
             reply({"type": "saved", "ok": False, "error": {"code": code, "message": text}})
         if not self.running:
             return refuse("no_session", "No hay una sesión de juego en curso")
         if self._take_fault((CLOSED,)):
-            self.saves.append({"ok": False, "code": CLOSED})
+            self._record({"ok": False, "code": CLOSED})
             return reply(None)
         # `save_failed` is the launcher's own: it could not attend the save, or
         # (MUN OS after v0.1.0-dev.5) could not hand it to the card service.
@@ -329,32 +352,60 @@ class SaveGate:
             return refuse("save_invalid", "La partida contiene texto que no se puede guardar")
         if size > SAVE_MAX_BYTES:
             return refuse("save_too_large", TOO_LARGE)
-        with self._lock:
+        with self._state:
             if self.saving:
                 busy = True
             else:
                 busy, self.saving = False, True
+                self._state.notify_all()
         if busy:
             return refuse("save_busy", "Ya hay un guardado en curso")
 
         def work() -> None:
-            if self.save_delay:
-                time.sleep(self.save_delay)
+            if self.hold or self.save_delay:
+                # The card has the save and has not answered: until it is
+                # released (or the session ends), or for as long as it takes.
+                self._release.wait(None if self.hold else self.save_delay)
             fault = self._take_fault(CARD_FAULTS)
             if fault:
                 outcome = {"ok": False, "error": {"code": fault, "message": CARD_FAULTS[fault]}}
             else:
                 outcome = self.card.write(self.session, schema, message["data"])
-            with self._lock:
-                self.saving = False
-            self.saves.append({"ok": bool(outcome.get("ok")), **({"bytes": outcome["bytes"]} if outcome.get("ok")
-                                                                   else {"code": outcome["error"]["code"]})})
+            self._record({"ok": bool(outcome.get("ok")), **({"bytes": outcome["bytes"]} if outcome.get("ok")
+                                                             else {"code": outcome["error"]["code"]})}, saving=False)
             if not self.running:
                 self.log("save answered after the session ended; not delivered")
                 return
             reply({"type": "saved", "ok": bool(outcome.get("ok")),
                    **({"bytes": outcome.get("bytes")} if outcome.get("ok") else {"error": outcome.get("error")})})
         threading.Thread(target=work, name="save", daemon=True).start()
+
+    # -- what the session can be asked about, and told ---------------------
+    def release(self) -> None:
+        """The held card answers: the save in it, and every later one, goes on."""
+        self._release.set()
+
+    def wait_saving(self, timeout: Optional[float] = None) -> bool:
+        """Wait until a save is in the card and unanswered. False if `timeout` passed first."""
+        with self._state:
+            return self._state.wait_for(lambda: self.saving, timeout)
+
+    def wait_saves(self, count: int, timeout: Optional[float] = None) -> bool:
+        """Wait until `count` requests have had their outcome (written, refused or closed)."""
+        with self._state:
+            return self._state.wait_for(lambda: len(self.saves) >= count, timeout)
+
+    def wait_idle(self, timeout: Optional[float] = None) -> bool:
+        """Wait until no save is in the card: what it took is written, or
+        refused, and recorded. One that is held stays held: release it, or
+        end the session, first. False if `timeout` passed first."""
+        with self._state:
+            return self._state.wait_for(lambda: not self.saving, timeout)
+
+    @property
+    def confirmed(self) -> int:
+        """How many saves the card holds by this session."""
+        return sum(1 for save in list(self.saves) if save["ok"])
 
     # -- the socket --------------------------------------------------------
     def _serve(self) -> None:
@@ -401,7 +452,7 @@ class SaveGate:
                         drop(min(silent, key=lambda held: deadlines[held]))
                     connection.setblocking(False)
                     readers[connection] = _LineReader(SAVE_LINE_MAX)
-                    deadlines[connection] = time.monotonic() + self.request_timeout
+                    deadlines[connection] = self.clock() + self.request_timeout
                     selector.register(connection, selectors.EVENT_READ, None)
                     continue
                 connection = key.fileobj
@@ -412,7 +463,7 @@ class SaveGate:
                     requests = reader.feed(data) if (data and reader) else []
                 except OverflowError:
                     # No save needs a line that long: the game is told, then dropped.
-                    self.saves.append({"ok": False, "code": "save_too_large"})
+                    self._record({"ok": False, "code": "save_too_large"})
                     send(connection, {"type": "saved", "ok": False,
                                       "error": {"code": "save_too_large", "message": TOO_LARGE}})
                     drop(connection)
@@ -425,7 +476,7 @@ class SaveGate:
                 for message in requests[:1]:            # one request per connection
                     readers[connection] = None
                     self.request(message, lambda answer, c=connection: send(c, answer))
-            now = time.monotonic()
+            now = self.clock()
             for connection in [held for held, reader in readers.items()
                                if reader is not None and now > deadlines[held]]:
                 drop(connection)
@@ -434,11 +485,13 @@ class SaveGate:
         selector.close()
 
     def end_session(self) -> None:
-        """The game has stopped: no new saves, pending answers undelivered."""
+        """The game has stopped: no new saves, pending answers undelivered.
+        A save the card already has is written."""
         self.running = False
+        self._release.set()
 
     def close(self) -> None:
-        self.running = False
+        self.end_session()
         self._stop.set()
         self._thread.join(timeout=2.0)
         self._listener.close()
@@ -446,6 +499,15 @@ class SaveGate:
             self.path.unlink()
         except OSError:
             pass
+
+
+# What a session can be stopped at (`mdk sim --stop-when`): a state of its
+# saves, read from the service.
+STOP_STATES: Dict[Optional[str], Callable[[SaveGate], bool]] = {
+    None: lambda gate: False,
+    "saving": lambda gate: gate.saving,
+    "saved": lambda gate: gate.confirmed > 0,
+}
 
 
 def _result_of(returncode: int) -> Dict[str, Any]:
@@ -465,13 +527,20 @@ def run_session(entry: Path, card: SimCard, profile: str, content: Optional[Path
                 display: Optional[str] = "1920x1080", extra_env: Optional[Dict[str, str]] = None,
                 console_env: bool = False, stop_after: Optional[float] = None, timeout: Optional[float] = None,
                 fail: Optional[Dict[str, int]] = None, save_delay: float = 0.0,
-                root: Optional[Path] = None, log: Callable[[str], None] = print) -> Dict[str, Any]:
+                root: Optional[Path] = None, log: Callable[[str], None] = print,
+                stop_when: Optional[str] = None, hold_saves: bool = False) -> Dict[str, Any]:
     """Run one session of `entry` against `card` and return its record.
 
-    `stop_after` ends the game as the console does (SIGTERM, then SIGKILL
-    after the grace period); `timeout` is the simulator's own bound for a run
-    nobody stops, after which the game is ended the same way and the record
-    says so."""
+    The game is ended as the console ends it (SIGTERM, then SIGKILL after
+    the grace period) `stop_after` seconds from its start, or when what
+    `stop_when` names has happened: "saving" (a save is in the card,
+    unanswered) or "saved" (the card holds a save of this session).
+    `hold_saves` makes the card keep each save unanswered while the session
+    lasts. `timeout` is the simulator's own bound for a run nobody stops,
+    after which the game is ended the same way and the record says so."""
+    if stop_when not in STOP_STATES:
+        raise MdkError("E-ARGUMENT", f"Unknown state to stop at: {stop_when!r}.",
+                       "Known: " + ", ".join(state for state in STOP_STATES if state) + ".")
     if profile not in PROFILE_ENVIRONMENT:
         raise MdkError("E-PROFILE", f"Unknown runtime profile {profile!r}.",
                        "The console knows: " + ", ".join(PROFILE_ENVIRONMENT) + ".")
@@ -503,8 +572,9 @@ def run_session(entry: Path, card: SimCard, profile: str, content: Optional[Path
         if console_env:
             environment.update(PROFILE_ENVIRONMENT[profile])
         environment.update(extra_env or {})
-        gate = SaveGate(dest / "save.sock", card, session, fail=fail, save_delay=save_delay,
+        gate = SaveGate(dest / "save.sock", card, session, fail=fail, save_delay=save_delay, hold=hold_saves,
                         log=lambda line: log(f"session {session}: {line}"))
+        reached = STOP_STATES[stop_when]
         started = time.monotonic()
         try:
             process = subprocess.Popen([str(game)], cwd=str(work), env=environment, stdin=subprocess.DEVNULL)
@@ -519,7 +589,7 @@ def run_session(entry: Path, card: SimCard, profile: str, content: Optional[Path
         limit = None if timeout is None else started + timeout
         while process.poll() is None:
             now = time.monotonic()
-            reason = "stop" if deadline is not None and now >= deadline else \
+            reason = "stop" if (deadline is not None and now >= deadline) or reached(gate) else \
                      "timeout" if limit is not None and now >= limit else None
             if reason is None:
                 time.sleep(0.02)
@@ -539,7 +609,7 @@ def run_session(entry: Path, card: SimCard, profile: str, content: Optional[Path
         record.update(_result_of(process.returncode))
         record["seconds"] = round(time.monotonic() - started, 3)
         record["stop"] = stop
-        time.sleep(0.05)                            # let a write in flight finish, as the console accounts for it
+        gate.wait_idle()                            # a write under way finishes, as the console accounts for it
         record["saves"] = list(gate.saves)
     finally:
         if gate is not None:

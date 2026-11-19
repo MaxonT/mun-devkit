@@ -7,10 +7,9 @@ card holds afterwards, and what a session is handed back."""
 
 import json
 import threading
-import time
 import unittest
 
-from support import SAVES, Scratch, ask, save_line
+from support import PATIENCE, SAVES, Scratch, ask, attended, connect, save_line
 
 from mdk import sim
 
@@ -101,14 +100,16 @@ class SaveRequests(Scratch):
 
     def test_one_save_at_a_time(self):
         card = self.card()
-        gate = self.gate(card, save_delay=0.4)
+        gate = self.gate(card, hold=True)                   # the card keeps the first save unanswered
         answers = {}
         first = threading.Thread(target=lambda: answers.update(first=ask(gate.path, save_line({"n": 1}))))
         first.start()
-        time.sleep(0.1)
+        self.assertTrue(gate.wait_saving(PATIENCE))
         second = ask(gate.path, save_line({"n": 2}))
-        first.join()
         self.assertEqual(second["error"]["code"], "save_busy")
+        self.assertFalse((card.directory / "save.json").exists())
+        gate.release()
+        first.join()
         self.assertTrue(answers["first"]["ok"])
         self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"n": 1})
         self.assertTrue(ask(gate.path, save_line({"n": 3}))["ok"])          # free again afterwards
@@ -116,27 +117,40 @@ class SaveRequests(Scratch):
     def test_a_line_that_is_not_a_json_object_gets_no_answer(self):
         gate = self.gate()
         for line in (b"not json\n", b"[1,2,3]\n", b'"save"\n', b"\n"):
-            self.assertIsNone(ask(gate.path, line, timeout=0.4), line)
+            connection = connect(self, gate.path)
+            connection.sendall(line)
+            self.assertIsNone(attended(gate, connection), line)
+        self.assertEqual({save["code"] for save in gate.saves}, {"save_invalid"})     # the markers alone
 
     def test_a_line_over_the_limit_is_answered_and_the_connection_closed(self):
         gate = self.gate()
         for line in (b"x" * (sim.SAVE_LINE_MAX + 70000),                    # never finished
                      b'{"type":"save","schema":1,"data":{"t":"' + b"x" * sim.SAVE_LINE_MAX + b'"}}\n'):
-            answer = ask(gate.path, line, timeout=3.0)
+            answer = ask(gate.path, line)
             self.assertEqual((answer["ok"], answer["error"]["code"]), (False, "save_too_large"))
         self.assertTrue(ask(gate.path, save_line({"n": 1}))["ok"])          # the service goes on
 
     def test_a_line_nested_too_deep_gets_no_answer(self):
         gate = self.gate()
         deep = b'{"type":"save","schema":1,"data":{"a":' + b"[" * 64 + b"]" * 64 + b"}}\n"
-        self.assertIsNone(ask(gate.path, deep, timeout=0.4))
+        connection = connect(self, gate.path)
+        connection.sendall(deep)
+        self.assertIsNone(attended(gate, connection))
         fits = b'{"type":"save","schema":1,"data":{"a":' + b"[" * 62 + b"]" * 62 + b"}}\n"
         self.assertTrue(ask(gate.path, fits)["ok"])
 
     def test_a_connection_that_asks_nothing_is_closed(self):
-        gate = self.gate(request_timeout=0.3)
-        self.assertEqual(ask(gate.path, b"", timeout=2.0), "")
-        self.assertEqual(ask(gate.path, b'{"type":"save"', timeout=2.0), "")
+        now = [0.0]                                         # the service's clock, moved by hand
+        gate = self.gate(clock=lambda: now[0])
+        silent, unfinished = connect(self, gate.path), connect(self, gate.path)
+        unfinished.sendall(b'{"type":"save"')
+        self.assertIsNone(attended(gate, silent))           # held open while its time lasts
+        self.assertIsNone(attended(gate, unfinished))
+        now[0] = sim.SAVE_REQUEST_TIMEOUT - 1
+        self.assertIsNone(attended(gate, silent))
+        now[0] = sim.SAVE_REQUEST_TIMEOUT + 1
+        for connection in (silent, unfinished):
+            self.assertEqual(connection.recv(64), b"")      # closed, without an answer
         self.assertTrue(ask(gate.path, save_line({"n": 1}))["ok"])
 
     def test_one_request_per_connection(self):
@@ -144,9 +158,12 @@ class SaveRequests(Scratch):
         gate = self.gate(card)
         answer = ask(gate.path, save_line({"n": 1}) + save_line({"n": 2}))
         self.assertTrue(answer["ok"])
-        time.sleep(0.2)
+        # Once the service has attended a later request, the second line has
+        # been read: it made no save.
+        ask(gate.path, save_line({}, schema=0))
+        gate.wait_idle()
         self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"n": 1})
-        self.assertEqual(len(gate.saves), 1)
+        self.assertEqual([save.get("code", "ok") for save in gate.saves], ["ok", "save_invalid"])
 
     def test_no_save_once_the_session_has_ended(self):
         card = self.card()
@@ -157,16 +174,34 @@ class SaveRequests(Scratch):
 
     def test_an_answer_that_arrives_after_the_session_is_not_delivered(self):
         card = self.card()
-        gate = self.gate(card, save_delay=0.3)
+        gate = self.gate(card, hold=True)
         answers = {}
-        asking = threading.Thread(target=lambda: answers.update(got=ask(gate.path, save_line({"n": 1}), timeout=1.0)))
+        asking = threading.Thread(target=lambda: answers.update(got=ask(gate.path, save_line({"n": 1}))))
         asking.start()
-        time.sleep(0.1)
+        self.assertTrue(gate.wait_saving(PATIENCE))
         gate.end_session()
-        asking.join()
-        self.assertIsNone(answers["got"])
+        gate.wait_idle()
         # The write itself was already under way and completes on the card.
         self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"n": 1})
+        self.assertEqual(gate.saves, [{"ok": True, "bytes": (card.directory / "save.json").stat().st_size}])
+        gate.close()                                        # the socket goes with the session
+        asking.join()
+        self.assertEqual(answers["got"], "")                # closed: the answer was never sent
+
+    def test_a_card_s_delay_ends_with_the_session(self):
+        # The delay a person asks for to see a slow card. An hour: nothing
+        # here waits for it, and the session's end does not either.
+        card = self.card()
+        gate = self.gate(card, save_delay=3600.0)
+        asking = threading.Thread(target=lambda: ask(gate.path, save_line({"n": 1})))
+        asking.start()
+        self.assertTrue(gate.wait_saving(PATIENCE))
+        self.assertFalse((card.directory / "save.json").exists())
+        gate.end_session()
+        gate.wait_idle()
+        self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"n": 1})
+        gate.close()
+        asking.join()
 
 
 class Faults(Scratch):

@@ -156,6 +156,8 @@ mdk sim --container --fail save_failed:1 # the next save is not attended; the on
 mdk sim --container --fail closed:1      # the console closes the next save's connection unanswered
 mdk sim --container --stop-after 5       # SIGTERM after 5 s, SIGKILL 3 s later
 mdk sim --container --save-delay 2       # a slow card
+mdk sim --container --hold-saves --stop-when saving   # stopped while a save is unanswered
+mdk sim --container --stop-when saved    # stopped once the card holds a save
 mdk sim --fresh                          # start from a card with no save
 ```
 

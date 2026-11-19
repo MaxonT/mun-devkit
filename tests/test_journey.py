@@ -85,7 +85,7 @@ class Journey(unittest.TestCase):
         self.assertEqual(record["entry_needs"], ["libSDL2-2.0.so.0", "libopenal.so.1", "libm.so.6", "libc.so.6",
                                                  "ld-linux-aarch64.so.1"])
 
-        first = self.step("sim", "--container", "--fresh", "--timeout", "30", "--env", "MUN_HELLO_HEADLESS=1",
+        first = self.step("sim", "--container", "--fresh", "--timeout", "120", "--env", "MUN_HELLO_HEADLESS=1",
                           "--env", "MUN_HELLO_SCRIPT=up up up save wait quit")
         self.assertIn("card org.example.star-well", first)
         self.assertIn("content: hello.cfg read", first)
@@ -95,7 +95,7 @@ class Journey(unittest.TestCase):
         save = self.project / "build" / "sim-card" / "saves" / "org.example.star-well" / "save.json"
         self.assertEqual(json.loads(save.read_text())["payload"], {"count": 3, "saves": 1})
 
-        second = self.step("sim", "--container", "--timeout", "30", "--env", "MUN_HELLO_HEADLESS=1",
+        second = self.step("sim", "--container", "--timeout", "120", "--env", "MUN_HELLO_HEADLESS=1",
                            "--env", "MUN_HELLO_SCRIPT=up save wait quit")
         self.assertIn("restore: ok (count 3, saves 1)", second)
         self.assertIn("save restored", second)

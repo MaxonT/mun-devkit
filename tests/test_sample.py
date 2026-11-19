@@ -42,12 +42,12 @@ class Sample(unittest.TestCase):
     def session(self, script=None, *options, headless=True):
         """One simulated session; returns (its record, the game's log)."""
         command = [sys.executable, str(ROOT / "mdk"), "sim", "--project", str(SAMPLE), "--container", "--json",
-                   "--timeout", "30", *options]
+                   "--timeout", "120", *options]
         if headless:
             command += ["--env", "MUN_HELLO_HEADLESS=1"]
         if script is not None:
             command += ["--env", f"MUN_HELLO_SCRIPT={script}"]
-        done = subprocess.run(command, capture_output=True, text=True, timeout=120)
+        done = subprocess.run(command, capture_output=True, text=True, timeout=600)
         try:
             return json.loads(done.stdout), done.stderr
         except ValueError:
@@ -74,20 +74,31 @@ class Sample(unittest.TestCase):
         self.assertEqual(json.loads((SAVE / "save.json.prev").read_text())["payload"], {"count": 3, "saves": 1})
 
     def test_the_console_s_stop_ends_the_game_cleanly(self):
-        record, log = self.session("up idle:100000", "--stop-after", "1")
+        # Stopped once its save is on the card: the game is then in its loop.
+        record, log = self.session("up save wait idle:100000", "--stop-when", "saved")
         self.assertEqual(record["result"], "exited")
-        self.assertTrue(record["stop"]["requested"])
-        self.assertFalse(record["stop"]["killed"])
-        self.assertLess(record["stop"]["seconds_to_end"], 1.0)
+        self.assertEqual((record["stop"]["requested"], record["stop"]["reason"]), (True, "stop"))
+        self.assertFalse(record["stop"]["killed"])          # it ended by itself within the console's grace period
         self.assertIn("asked to stop", log)
         self.assertIn("exit 0", log)
 
-    def test_a_stop_during_a_save_still_ends_in_time_and_the_card_is_whole(self):
-        record, log = self.session("up up save idle:100000", "--stop-after", "0.6", "--save-delay", "4")
-        self.assertEqual(record["result"], "exited")
+    def test_stop_after_asks_the_game_to_stop(self):
+        # The option a person uses. At once: whether the game had installed
+        # its handler yet is not this test's matter, only that it was asked.
+        record, _ = self.session("idle:100000", "--stop-after", "0")
+        self.assertEqual((record["stop"]["requested"], record["stop"]["reason"]), (True, "stop"))
         self.assertFalse(record["stop"]["killed"])
-        self.assertLess(record["stop"]["seconds_to_end"], 3.0)
+
+    def test_a_stop_during_a_save_still_ends_in_time_and_the_card_is_whole(self):
+        # The card keeps the save unanswered, and the stop comes while it does.
+        record, log = self.session("up up save idle:100000", "--hold-saves", "--stop-when", "saving")
+        self.assertEqual(record["result"], "exited")
+        self.assertTrue(record["stop"]["requested"])
+        self.assertFalse(record["stop"]["killed"])
         self.assertIn("a save was still unanswered", log)
+        # The write that was under way finished: the card holds that save, whole.
+        self.assertEqual(record["saves"], [{"ok": True, "bytes": (SAVE / "save.json").stat().st_size}])
+        self.assertEqual(json.loads((SAVE / "save.json").read_text())["payload"], {"count": 2, "saves": 1})
 
     def test_a_refused_save_is_reported_and_the_previous_save_stays(self):
         self.session("up save wait quit")

@@ -149,7 +149,7 @@ def cmd_pack(args) -> int:
 def _sim_arguments(args) -> List[str]:
     """The simulator's own options, to repeat inside the environment."""
     passed: List[str] = []
-    for name in ("stop_after", "timeout", "save_delay", "display"):
+    for name in ("stop_after", "stop_when", "timeout", "save_delay", "display"):
         value = getattr(args, name)
         if value is not None:
             passed += ["--" + name.replace("_", "-"), str(value)]
@@ -157,7 +157,7 @@ def _sim_arguments(args) -> List[str]:
         passed += ["--fail", value]
     for value in args.env or []:
         passed += ["--env", value]
-    for flag in ("console_env", "json", "fresh"):
+    for flag in ("console_env", "json", "fresh", "hold_saves"):
         if getattr(args, flag):
             passed.append("--" + flag.replace("_", "-"))
     return passed
@@ -184,7 +184,8 @@ def cmd_sim(args) -> int:
     record = sim.run_session(found.entry, card, found.card["profile"], content=found.content,
                              display=args.display, extra_env=extra, console_env=args.console_env,
                              stop_after=args.stop_after, timeout=args.timeout, fail=sim.parse_fail(args.fail),
-                             save_delay=args.save_delay or 0.0, log=log)
+                             save_delay=args.save_delay or 0.0, log=log, stop_when=args.stop_when,
+                             hold_saves=args.hold_saves)
     print(json.dumps(record, indent=2) if args.json else sim.describe(record))
     return 0 if record["result"] == "exited" and not record["stop"].get("killed") else 3
 
@@ -222,10 +223,16 @@ def parser() -> argparse.ArgumentParser:
                    help="run inside the SDK environment (for an AArch64 Linux build on another host)")
     p.add_argument("--stop-after", type=float, metavar="SECONDS",
                    help="end the session as the console does: SIGTERM, then SIGKILL after 3 s")
+    p.add_argument("--stop-when", choices=[state for state in sim.STOP_STATES if state], metavar="STATE",
+                   help="end it the same way once a save is in the card, unanswered (saving), "
+                        "or once the card holds a save of this session (saved)")
     p.add_argument("--timeout", type=float, metavar="SECONDS", help="the simulator's own bound for the run")
     p.add_argument("--fail", action="append", metavar="CODE[:N]",
                    help="answer saves with this code (every save, or the next N): " + ", ".join(sorted(sim.FAULTS)))
     p.add_argument("--save-delay", type=float, metavar="SECONDS", help="how long the simulated card takes to save")
+    p.add_argument("--hold-saves", action="store_true",
+                   help="the simulated card does not answer a save while the session lasts; "
+                        "the save is written when the session ends")
     p.add_argument("--display", default="1920x1080", metavar="WxH", help="MUN_DISPLAY_MODE for a GL-profile game")
     p.add_argument("--env", action="append", metavar="NAME=VALUE", help="add a variable to the game's environment")
     p.add_argument("--console-env", action="store_true",

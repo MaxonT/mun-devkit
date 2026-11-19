@@ -9,9 +9,14 @@ import socket
 import threading
 import unittest
 
-from support import Scratch, compile_munc, munc
+from support import PATIENCE, Scratch, compile_munc, munc
 
 from mdk import sim
+
+
+# The client's own timeout where an answer is expected, in milliseconds:
+# long enough that only a missing answer reaches it.
+ANSWERED = str(int(PATIENCE * 1000))
 
 
 class Client(Scratch):
@@ -54,7 +59,7 @@ class Client(Scratch):
     def test_a_save_is_confirmed(self):
         card = self.card()
         gate = self.gate(card)
-        got = self.run_munc(["write", "3", "5000"], b'{"count": 7, "name": "caf\xc3\xa9"}', save_socket=gate.path)
+        got = self.run_munc(["write", "3", ANSWERED], b'{"count": 7, "name": "caf\xc3\xa9"}', save_socket=gate.path)
         self.assertEqual((got["status"], got["code"], got["message"]), ("ok", "", ""))
         written = (card.directory / "save.json").read_bytes()
         self.assertEqual(int(got["bytes"]), len(written))
@@ -64,7 +69,7 @@ class Client(Scratch):
     def test_line_breaks_in_the_payload_do_not_break_the_request(self):
         card = self.card()
         gate = self.gate(card)
-        got = self.run_munc(["write", "1", "5000"], b'{\n  "a": 1,\r\n  "b": [1,\n 2]\n}\n', save_socket=gate.path)
+        got = self.run_munc(["write", "1", ANSWERED], b'{\n  "a": 1,\r\n  "b": [1,\n 2]\n}\n', save_socket=gate.path)
         self.assertEqual(got["status"], "ok")
         self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"a": 1, "b": [1, 2]})
 
@@ -74,18 +79,18 @@ class Client(Scratch):
                 card = sim.SimCard(self.scratch / f"card-{code}", "mun.test", "1.0.0", self.card().rules)
                 gate = sim.SaveGate(self.scratch / f"{code}.sock", card, "stest", fail={code: -1})
                 self.addCleanup(gate.close)
-                got = self.run_munc(["write", "1", "5000"], b'{"n":1}', save_socket=gate.path)
+                got = self.run_munc(["write", "1", ANSWERED], b'{"n":1}', save_socket=gate.path)
                 self.assertEqual((got["status"], got["code"], got["message"], got["bytes"]),
                                  ("refused", code, sentence, "0"))
 
     def test_a_save_the_console_could_not_attend_is_refused_and_the_next_one_works(self):
         card = self.card()
         gate = self.gate(card, fail={"save_failed": 1})
-        first = self.run_munc(["write", "1", "5000"], b'{"n":1}', save_socket=gate.path)
+        first = self.run_munc(["write", "1", ANSWERED], b'{"n":1}', save_socket=gate.path)
         self.assertEqual((first["status"], first["code"], first["message"], first["bytes"]),
                          ("refused", "save_failed", sim.ANSWERED_FAULTS["save_failed"], "0"))
         self.assertFalse((card.directory / "save.json").exists())
-        second = self.run_munc(["write", "1", "5000"], b'{"n":2}', save_socket=gate.path)
+        second = self.run_munc(["write", "1", ANSWERED], b'{"n":2}', save_socket=gate.path)
         self.assertEqual(second["status"], "ok")
         self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"n": 2})
 
@@ -95,19 +100,19 @@ class Client(Scratch):
         gate = self.gate(fail={"closed": 1})
         got = self.run_munc(["write", "1", "600000"], b'{"n":1}', save_socket=gate.path)
         self.assertEqual((got["status"], got["code"], got["bytes"]), ("io", "", "0"))
-        self.assertEqual(self.run_munc(["write", "1", "5000"], b'{"n":2}', save_socket=gate.path)["status"], "ok")
+        self.assertEqual(self.run_munc(["write", "1", ANSWERED], b'{"n":2}', save_socket=gate.path)["status"], "ok")
 
     def test_the_console_can_refuse_what_the_client_let_through(self):
         # Valid JSON, and text no card can hold: half of a surrogate pair.
         gate = self.gate()
-        got = self.run_munc(["write", "1", "5000"], b'{"t":"\\ud800"}', save_socket=gate.path)
+        got = self.run_munc(["write", "1", ANSWERED], b'{"t":"\\ud800"}', save_socket=gate.path)
         self.assertEqual((got["status"], got["code"]), ("refused", "save_invalid"))
 
     def test_text_outside_ascii_counts_as_its_utf8_bytes(self):
         card = self.card()
         gate = self.gate(card)
         payload = json.dumps({"t": "ñ" * 30000}, ensure_ascii=False).encode("utf-8")
-        self.assertEqual(self.run_munc(["write", "1", "5000"], payload, save_socket=gate.path)["status"], "ok")
+        self.assertEqual(self.run_munc(["write", "1", ANSWERED], payload, save_socket=gate.path)["status"], "ok")
         self.assertEqual(json.loads((card.directory / "save.json").read_bytes())["payload"], {"t": "ñ" * 30000})
 
     def test_what_the_client_refuses_before_asking(self):
@@ -127,19 +132,20 @@ class Client(Scratch):
 
     def test_no_answer_in_time_is_a_timeout(self):
         card = self.card()
-        gate = self.gate(card, save_delay=1.0)
+        gate = self.gate(card, hold=True)                   # a card that does not answer while the client waits
         got = self.run_munc(["write", "1", "200"], b'{"n":1}', save_socket=gate.path)
         self.assertEqual(got["status"], "timeout")
+        self.assertEqual(gate.saves, [])                    # and had not: the client gave up by itself
 
     def test_one_save_at_a_time(self):
-        gate = self.gate(save_delay=0.5)
+        gate = self.gate(hold=True)                         # the card keeps the first save unanswered
         results = {}
         first = threading.Thread(target=lambda: results.update(
-            first=self.run_munc(["write", "1", "5000"], b'{"n":1}', save_socket=gate.path)))
+            first=self.run_munc(["write", "1", ANSWERED], b'{"n":1}', save_socket=gate.path)))
         first.start()
-        import time
-        time.sleep(0.15)
-        second = self.run_munc(["write", "1", "5000"], b'{"n":2}', save_socket=gate.path)
+        self.assertTrue(gate.wait_saving(PATIENCE))
+        second = self.run_munc(["write", "1", ANSWERED], b'{"n":2}', save_socket=gate.path)
+        gate.release()
         first.join()
         self.assertEqual((second["status"], second["code"]), ("refused", "save_busy"))
         self.assertEqual(results["first"]["status"], "ok")
@@ -167,27 +173,27 @@ class Client(Scratch):
         return path
 
     def test_a_console_that_closes_without_answering(self):
-        got = self.run_munc(["write", "1", "2000"], b'{"n":1}', save_socket=self.fake_console(b""))
+        got = self.run_munc(["write", "1", ANSWERED], b'{"n":1}', save_socket=self.fake_console(b""))
         self.assertEqual(got["status"], "io")
 
     def test_answers_the_client_cannot_read(self):
         for reply in (b"hello\n", b'{"type":"saved"}\n', b'{"type":"other","ok":true}\n', b'{"type":"saved","ok":1}\n',
                       b'{"type":"saved","ok":false}\n', b'{"type":"saved","ok":false,"error":{"message":"x"}}\n',
                       b'{"type":"saved","ok":true,"bytes":-1}\n', b"x" * 5000 + b"\n"):
-            got = self.run_munc(["write", "1", "2000"], b'{"n":1}', save_socket=self.fake_console(reply))
+            got = self.run_munc(["write", "1", ANSWERED], b'{"n":1}', save_socket=self.fake_console(reply))
             self.assertEqual((got["status"], got["code"], got["bytes"]), ("protocol", "", "0"), reply)
             (self.scratch / "fake.sock").unlink()
 
     def test_escapes_in_an_answer_are_decoded(self):
         reply = (b'{"type":"saved","ok":false,"error":{"code":"no_space",'
                  b'"message":"l\\u00ednea \\"1\\"\\n\\ud83c\\udfae \\ud800 fin","detail":"x"}}\n')
-        got = munc(self.program, ["write", "1", "2000"], {"MUN_SAVE_SOCKET": str(self.fake_console(reply))}, b'{"n":1}')
+        got = munc(self.program, ["write", "1", ANSWERED], {"MUN_SAVE_SOCKET": str(self.fake_console(reply))}, b'{"n":1}')
         self.assertEqual(got["status"], "refused")
         self.assertEqual(got["message"], 'línea "1"')           # munc prints lines: the rest is on the next one
         long_reply = ('{"type":"saved","ok":false,"error":{"code":"' + "c" * 60 + '","message":"' + "é" * 400
                       + '"}}\n').encode("utf-8")
         (self.scratch / "fake.sock").unlink()
-        got = self.run_munc(["write", "1", "2000"], b'{"n":1}', save_socket=self.fake_console(long_reply))
+        got = self.run_munc(["write", "1", ANSWERED], b'{"n":1}', save_socket=self.fake_console(long_reply))
         self.assertEqual(got["code"], "c" * 31)
         self.assertEqual(got["message"], "é" * 95)               # cut at a character boundary, within 191 bytes
 
@@ -219,7 +225,7 @@ class Client(Scratch):
     def test_a_save_written_by_the_simulated_console_is_loaded(self):
         card = self.card()
         gate = self.gate(card)
-        self.assertEqual(self.run_munc(["write", "4", "5000"], b'{"count":12}', save_socket=gate.path)["status"], "ok")
+        self.assertEqual(self.run_munc(["write", "4", ANSWERED], b'{"count":12}', save_socket=gate.path)["status"], "ok")
         target = self.scratch / "restored.json"
         card.restore(target)
         got = self.run_munc(["load"], save_file=target)
