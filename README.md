@@ -205,6 +205,18 @@ What a refusal means for the game:
 | `save_failed`, `save_busy` | The console could not attend this request (it was busy with another save, or could not pass this one on). Nothing was written | Passing: say "not saved" and offer the save again at the game's next save point. Do not retry in a loop |
 | `save_too_large`, `save_invalid` | The request itself | A fault in the game: fix the payload |
 
+Two things a game does not see as a save's answer, on MUN OS after
+v0.1.0-dev.5:
+
+- A session that could not be prepared ends before the game starts, with
+  the launch result `prepare_failed`. The player is back in the console's
+  menu; no game code runs, so there is nothing to handle, and the simulator
+  does not produce it.
+- The console's card service runs within a memory limit. The largest save
+  a card can hold fits well inside it. If the service were ended while it
+  wrote, the card keeps its last complete save, and the game is told the
+  save was not made (a refusal, or a closed connection: `MUN_IO`).
+
 A connection the console closes without answering is `MUN_IO`, and no
 answer in time is `MUN_TIMEOUT`: both end the call, never a wait without
 end, and both leave the outcome unknown until the next start reads the save
